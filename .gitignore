@@ -1,0 +1,13 @@
+node_modules
+# Keep environment variables out of version control
+.env
+.env.local
+/generated/prisma
+.next
+coverage
+prisma/dev.db
+tsconfig.tsbuildinfo
+public/uploads/*
+!public/uploads/.gitkeep
+logs/*
+!logs/.gitkeep

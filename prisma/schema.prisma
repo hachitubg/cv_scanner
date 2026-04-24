@@ -1,0 +1,140 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id        String   @id @default(cuid())
+  name      String
+  email     String   @unique
+  password  String
+  role      String   @default("USER")
+  emailVerifiedAt               DateTime?
+  emailVerificationTokenHash    String?  @unique
+  emailVerificationTokenExpiresAt DateTime?
+  createdAt DateTime @default(now())
+
+  ownedWorkspaces  Workspace[]       @relation("WorkspaceOwner")
+  workspaceMembers WorkspaceMember[]
+  candidates       Candidate[]       @relation("CandidateHR")
+  managerReviews   Candidate[]       @relation("CandidateManagerReviewer")
+  uploadedFiles    CVFile[]          @relation("FileUploader")
+  statusChanges    StatusHistory[]
+}
+
+model Workspace {
+  id        String   @id @default(cuid())
+  name      String
+  ownerId   String
+  createdAt DateTime @default(now())
+
+  owner      User              @relation("WorkspaceOwner", fields: [ownerId], references: [id], onDelete: Cascade)
+  members    WorkspaceMember[]
+  candidates Candidate[]
+  cvFiles    CVFile[]
+  projects   Project[]
+}
+
+model WorkspaceMember {
+  id          String        @id @default(cuid())
+  workspaceId String
+  userId      String
+  role        String        @default("HR")
+  joinedAt    DateTime      @default(now())
+
+  workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([workspaceId, userId])
+}
+
+model CVFile {
+  id          String   @id @default(cuid())
+  workspaceId String
+  uploadedBy  String
+  fileName    String
+  filePath    String?
+  mimeType    String?
+  fileSize    Int
+  rawText     String
+  uploadedAt  DateTime @default(now())
+
+  workspace Workspace  @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  uploader  User       @relation("FileUploader", fields: [uploadedBy], references: [id], onDelete: Cascade)
+  candidate Candidate?
+}
+
+model Candidate {
+  id          String  @id @default(cuid())
+  workspaceId String
+  hrId        String
+  cvFileId    String? @unique
+  projectId   String?
+
+  fullName          String?
+  email             String?
+  phone             String?
+  dateOfBirth       String?
+  address           String?
+  hometown          String?
+  school            String?
+  graduationYear    String?
+  yearsOfExperience Int?
+  skillsJson        String?
+  summary           String?
+
+  position          String?
+  source            String?
+  offerSalary       String?
+  notes             String?
+  interviewDate     String?
+  interviewerName   String?
+  interviewFeedback String?
+  managerDecision   String?
+  managerOfferSalary String?
+  managerReviewNote String?
+  managerReviewedAt DateTime?
+  managerReviewedById String?
+
+  status    String          @default("NEW")
+  createdAt DateTime        @default(now())
+  updatedAt DateTime        @updatedAt
+
+  workspace     Workspace       @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  hr            User            @relation("CandidateHR", fields: [hrId], references: [id], onDelete: Cascade)
+  cvFile        CVFile?         @relation(fields: [cvFileId], references: [id], onDelete: SetNull)
+  project       Project?        @relation(fields: [projectId], references: [id], onDelete: SetNull)
+  managerReviewedBy User?       @relation("CandidateManagerReviewer", fields: [managerReviewedById], references: [id], onDelete: SetNull)
+  statusHistory StatusHistory[]
+}
+
+model Project {
+  id          String   @id @default(cuid())
+  workspaceId String
+  name        String
+  description String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  workspace  Workspace   @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  candidates Candidate[]
+
+  @@unique([workspaceId, name])
+}
+
+model StatusHistory {
+  id          String           @id @default(cuid())
+  candidateId String
+  fromStatus  String?
+  toStatus    String
+  note        String?
+  changedBy   String
+  changedAt   DateTime         @default(now())
+
+  candidate     Candidate @relation(fields: [candidateId], references: [id], onDelete: Cascade)
+  changedByUser User      @relation(fields: [changedBy], references: [id], onDelete: Cascade)
+}
