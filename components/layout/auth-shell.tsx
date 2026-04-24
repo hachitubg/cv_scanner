@@ -1,3 +1,5 @@
+import { NavIcon } from "@/components/layout/nav-icon";
+
 export function AuthShell({
   title,
   description,
@@ -22,7 +24,8 @@ export function AuthShell({
         <div className="grid overflow-hidden rounded-[2.5rem] border-4 border-white/70 bg-white/80 shadow-[0_35px_90px_-35px_rgba(160,57,100,0.35)] backdrop-blur-2xl lg:grid-cols-[1.05fr_0.95fr]">
           <section className="hidden bg-white px-12 py-14 lg:flex lg:flex-col lg:justify-between">
             <div>
-              <div className="mb-10 inline-flex items-center gap-3 rounded-full bg-primary-container px-5 py-3 text-sm font-black text-on-primary-container">
+              <div className="mb-10 inline-flex items-center gap-3 rounded-full bg-primary-container px-4 py-2.5 text-sm font-black text-on-primary-container">
+                <NavIcon className="size-9 rounded-[0.9rem]" />
                 <span className="text-lg">Quét CV</span>
                 <span className="rounded-full bg-white px-3 py-1 text-[11px] uppercase tracking-[0.18em]">
                   HR Suite

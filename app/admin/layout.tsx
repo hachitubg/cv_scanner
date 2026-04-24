@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
 
+import { NavIcon } from "@/components/layout/nav-icon";
 import { LogoutButton } from "@/components/layout/logout-button";
 import { auth } from "@/lib/auth";
 
@@ -27,11 +28,14 @@ export default async function AdminLayout({
           borderBottom: "1px solid rgba(226,232,240,0.9)",
         }}
       >
-        <div>
-          <div style={{ fontSize: 12, fontWeight: 900, letterSpacing: "0.12em", textTransform: "uppercase", color: "#a03964" }}>
-            System Admin
+        <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+          <NavIcon />
+          <div>
+            <div style={{ fontSize: 12, fontWeight: 900, letterSpacing: "0.12em", textTransform: "uppercase", color: "#a03964" }}>
+              System Admin
+            </div>
+            <div style={{ marginTop: 4, fontSize: 22, fontWeight: 900, color: "#111827" }}>CV Scanner Control Room</div>
           </div>
-          <div style={{ marginTop: 4, fontSize: 22, fontWeight: 900, color: "#111827" }}>CV Scanner Control Room</div>
         </div>
         <div style={{ display: "flex", alignItems: "center", gap: 16 }}>
           <Link href="/workspaces" style={{ fontWeight: 800, color: "#475569", textDecoration: "none" }}>

@@ -14,6 +14,7 @@ import {
   X,
 } from "lucide-react";
 
+import { NavIcon } from "@/components/layout/nav-icon";
 import { LogoutButton } from "@/components/layout/logout-button";
 import { cn, workspaceRoleMeta } from "@/lib/utils";
 import type { WorkspaceRoleType } from "@/types";
@@ -77,8 +78,9 @@ export function WorkspaceSidebar({
     <header className="sticky top-0 z-50 w-full bg-white/85 backdrop-blur-xl shadow-[0_4px_40px_-12px_rgba(160,57,100,0.10)]">
       <div className="mx-auto flex h-16 w-full max-w-7xl items-center justify-between gap-4 px-4 sm:px-6 lg:px-8">
         <div className="flex shrink-0 items-center gap-3">
-          <Link href="/workspaces" className="text-lg font-black tracking-tight text-primary">
-            Quét CV
+          <Link href="/workspaces" className="inline-flex items-center gap-2 text-lg font-black tracking-tight text-primary">
+            <NavIcon className="size-9 rounded-[0.9rem]" />
+            <span>Quét CV</span>
           </Link>
           <div className="hidden items-center gap-2 rounded-full bg-surface-container-low px-3 py-1.5 sm:flex">
             <span className="text-[0.65rem] font-black uppercase tracking-[0.18em] text-primary">WS</span>
