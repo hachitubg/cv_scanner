@@ -133,12 +133,6 @@ export function LoginForm({ callbackUrl }: { callbackUrl?: string }) {
         {isPending ? "Đang đăng nhập..." : "Đăng nhập ngay"}
       </Button>
 
-      <div className="rounded-[1.75rem] bg-white p-5 text-sm font-medium text-on-surface-variant">
-        <p className="font-bold text-on-surface">Tài khoản demo</p>
-        <p className="mt-2">Admin: `admin@cvscanner.local` / `Admin@123`</p>
-        <p>User: `thao@cvscanner.local` / `User@123`</p>
-      </div>
-
       <p className="text-center text-sm font-medium text-on-surface-variant">
         Chưa có tài khoản?{" "}
         <Link href="/register" className="font-black text-primary hover:underline">
