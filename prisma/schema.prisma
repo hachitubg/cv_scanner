@@ -61,6 +61,8 @@ model CVFile {
   mimeType    String?
   fileSize    Int
   rawText     String
+  rawTextArchivedPath String?
+  rawTextArchivedAt DateTime?
   uploadedAt  DateTime @default(now())
 
   workspace Workspace  @relation(fields: [workspaceId], references: [id], onDelete: Cascade)

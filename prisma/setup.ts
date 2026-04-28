@@ -67,6 +67,8 @@ CREATE TABLE "CVFile" (
   "mimeType" TEXT,
   "fileSize" INTEGER NOT NULL,
   "rawText" TEXT NOT NULL,
+  "rawTextArchivedPath" TEXT,
+  "rawTextArchivedAt" DATETIME,
   "uploadedAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
   CONSTRAINT "CVFile_workspaceId_fkey"
     FOREIGN KEY ("workspaceId") REFERENCES "Workspace" ("id")

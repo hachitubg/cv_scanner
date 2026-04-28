@@ -1,5 +1,9 @@
 import fs from "node:fs/promises";
 import path from "node:path";
+import { gzip } from "node:zlib";
+import { promisify } from "node:util";
+
+const gzipAsync = promisify(gzip);
 
 function slugifyFileName(fileName: string) {
   return fileName.replace(/[^a-zA-Z0-9._-]/g, "-").replace(/-+/g, "-").toLowerCase();
@@ -18,18 +22,37 @@ export async function saveUploadedFile(workspaceId: string, fileName: string, bu
 }
 
 export async function deleteUploadedFile(filePath?: string | null) {
-  if (!filePath) return;
+  if (!filePath) return false;
 
   const normalized = filePath.replace(/^\/+/, "");
   const absolutePath = path.join(process.cwd(), "public", normalized.replace(/^uploads[\\/]/, "uploads/"));
 
   try {
     await fs.unlink(absolutePath);
+    return true;
   } catch (error) {
     if ((error as NodeJS.ErrnoException).code !== "ENOENT") {
       throw error;
     }
+    return false;
   }
+}
+
+function safePathSegment(value: string) {
+  return value.replace(/[^a-zA-Z0-9_-]/g, "-");
+}
+
+export async function archiveRawTextFile(workspaceId: string, cvFileId: string, rawText: string) {
+  const safeWorkspaceId = safePathSegment(workspaceId);
+  const safeCvFileId = safePathSegment(cvFileId);
+  const relativePath = path.join("data", "archive", "cv-raw-text", safeWorkspaceId, `${safeCvFileId}.txt.gz`);
+  const absolutePath = path.join(process.cwd(), relativePath);
+  const compressed = await gzipAsync(Buffer.from(rawText, "utf8"), { level: 9 });
+
+  await fs.mkdir(path.dirname(absolutePath), { recursive: true });
+  await fs.writeFile(absolutePath, compressed);
+
+  return relativePath.replace(/\\/g, "/");
 }
 
 export async function getPathSize(targetPath: string): Promise<number> {

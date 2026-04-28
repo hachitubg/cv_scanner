@@ -8,9 +8,12 @@
     "start": "next start",
     "lint": "eslint .",
     "db:generate": "prisma generate",
+    "db:push": "prisma db push && prisma generate",
     "db:migrate": "npm run db:setup",
     "db:setup": "tsx prisma/setup.ts && prisma generate && tsx prisma/seed.ts",
-    "db:seed": "tsx prisma/seed.ts"
+    "db:seed": "tsx prisma/seed.ts",
+    "jobs:cleanup-cv-files": "tsx scripts/cleanup-old-cv-files.ts",
+    "jobs:cleanup-cv-files:weekly": "tsx scripts/weekly-cv-file-cleanup.ts"
   },
   "dependencies": {
     "@auth/prisma-adapter": "^2.11.2",
