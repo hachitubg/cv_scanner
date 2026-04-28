@@ -1,4 +1,4 @@
-# CV Scanner
+# Lệ HR - CV Manager Scanner
 
 Ứng dụng nội bộ cho team tuyển dụng để scan CV, quản lý ứng viên theo workspace, và tách rõ quyền giữa admin toàn hệ thống, HR workspace, và manager đánh giá nhân sự.
 
@@ -20,7 +20,7 @@ Hệ thống có 2 lớp quyền riêng biệt:
 
 | Role | Phạm vi |
 | --- | --- |
-| `ADMIN` | Xem và quản lý toàn bộ data trong CV Scanner, vào được `/admin`, monitor upload/SQLite/disk, quản lý users, workspaces, candidates, projects, files |
+| `ADMIN` | Xem và quản lý toàn bộ data trong Lệ HR - CV Manager Scanner, vào được `/admin`, monitor upload/SQLite/disk, quản lý users, workspaces, candidates, projects, files |
 | `USER` | Chỉ thao tác theo quyền membership trong từng workspace |
 
 ### 2. Role trong workspace

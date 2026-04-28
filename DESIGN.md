@@ -2,7 +2,7 @@
 
 ## 1. Product direction
 
-CV Scanner được thiết kế theo hướng "playful professional":
+Lệ HR - CV Manager Scanner được thiết kế theo hướng "playful professional":
 
 - giao diện sáng, mềm, nhiều lớp surface;
 - ưu tiên đọc nhanh candidate pipeline;

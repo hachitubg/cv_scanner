@@ -359,7 +359,7 @@ export function SystemAdminApp() {
     <Admin
       dataProvider={dataProvider}
       dashboard={SystemAdminDashboard}
-      title="CV Scanner Admin"
+      title="Lệ HR Admin"
       disableTelemetry
     >
       <Resource name="users" list={UsersList} edit={UsersEdit} create={UsersCreate} />

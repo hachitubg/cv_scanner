@@ -26,7 +26,7 @@ export function AuthShell({
             <div>
               <div className="mb-10 inline-flex items-center gap-3 rounded-full bg-primary-container px-4 py-2.5 text-sm font-black text-on-primary-container">
                 <NavIcon className="size-9 rounded-[0.9rem]" />
-                <span className="text-lg">Quét CV</span>
+                <span className="text-lg">Lệ HR</span>
                 <span className="rounded-full bg-white px-3 py-1 text-[11px] uppercase tracking-[0.18em]">
                   HR Suite
                 </span>
@@ -64,7 +64,7 @@ export function AuthShell({
             <div className="mx-auto max-w-md">
               <div className="mb-10">
                 <p className="mb-3 inline-flex rounded-full bg-white px-4 py-2 text-xs font-black uppercase tracking-[0.18em] text-primary">
-                  CV Scanner
+                  Lệ HR - CV Manager Scanner
                 </p>
                 <h2 className="text-4xl font-black text-on-surface">{title}</h2>
                 <p className="mt-3 text-base font-medium leading-7 text-on-surface-variant">{description}</p>

@@ -1,11 +1,11 @@
-# CV Scanner Deploy Notes
+# Lệ HR - CV Manager Scanner Deploy Notes
 
 ## VPS layout
 
 - App directory: `/var/www/cv_scanner`
 - PM2 process: `cv-scanner`
 - Internal app port: `3002`
-- Existing apps use ports `3000` and `3001`; keep CV Scanner on `3002` unless Nginx is updated accordingly.
+- Existing apps use ports `3000` and `3001`; keep Lệ HR - CV Manager Scanner on `3002` unless Nginx is updated accordingly.
 - Runtime logs:
   - PM2 logs: `pm2 logs cv-scanner`
   - App logs: `logs/app-YYYY-MM-DD.log`

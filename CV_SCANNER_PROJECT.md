@@ -1,8 +1,8 @@
-# CV Scanner - Tài liệu dự án
+# Lệ HR - CV Manager Scanner - Tài liệu dự án
 
 ## 1. Tổng quan
 
-CV Scanner là ứng dụng web nội bộ hỗ trợ xử lý quy trình nhận CV trong từng workspace tuyển dụng:
+Lệ HR - CV Manager Scanner là ứng dụng web nội bộ hỗ trợ xử lý quy trình nhận CV trong từng workspace tuyển dụng:
 
 - scan CV từ nhiều định dạng file;
 - OCR cho ảnh và PDF scan;

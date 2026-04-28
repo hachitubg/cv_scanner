@@ -9,7 +9,7 @@ const plusJakartaSans = Plus_Jakarta_Sans({
 });
 
 export const metadata: Metadata = {
-  title: "CV Scanner",
+  title: "Lệ HR - CV Manager Scanner",
   description: "Ứng dụng nội bộ giúp team HR scan CV, quản lý pipeline và workspace.",
 };
 

@@ -138,7 +138,7 @@ export function SystemAdminDashboard() {
         <div style={{ fontSize: 12, fontWeight: 900, letterSpacing: "0.12em", textTransform: "uppercase", color: "#a03964" }}>
           System Admin
         </div>
-        <h2 style={{ marginTop: 8, marginBottom: 8, fontSize: 36, lineHeight: 1.05 }}>Tổng quan hệ thống CV Scanner</h2>
+        <h2 style={{ marginTop: 8, marginBottom: 8, fontSize: 36, lineHeight: 1.05 }}>Tổng quan hệ thống Lệ HR</h2>
         <p style={{ margin: 0, maxWidth: 960, color: "#475569", fontWeight: 500 }}>
           Dashboard này tách riêng cho admin toàn hệ thống: theo dõi dữ liệu, dung lượng uploads, SQLite, disk và tài nguyên VPS đang chạy ứng dụng.
         </p>

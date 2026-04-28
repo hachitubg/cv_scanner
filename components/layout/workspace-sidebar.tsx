@@ -80,7 +80,7 @@ export function WorkspaceSidebar({
         <div className="flex shrink-0 items-center gap-3">
           <Link href="/workspaces" className="inline-flex items-center gap-2 text-lg font-black tracking-tight text-primary">
             <NavIcon className="size-9 rounded-[0.9rem]" />
-            <span>Quét CV</span>
+            <span>Lệ HR</span>
           </Link>
           <div className="hidden items-center gap-2 rounded-full bg-surface-container-low px-3 py-1.5 sm:flex">
             <span className="text-[0.65rem] font-black uppercase tracking-[0.18em] text-primary">WS</span>

@@ -34,7 +34,7 @@ export default async function AdminLayout({
             <div style={{ fontSize: 12, fontWeight: 900, letterSpacing: "0.12em", textTransform: "uppercase", color: "#a03964" }}>
               System Admin
             </div>
-            <div style={{ marginTop: 4, fontSize: 22, fontWeight: 900, color: "#111827" }}>CV Scanner Control Room</div>
+            <div style={{ marginTop: 4, fontSize: 22, fontWeight: 900, color: "#111827" }}>Lệ HR - CV Manager Scanner Control Room</div>
           </div>
         </div>
         <div style={{ display: "flex", alignItems: "center", gap: 16 }}>

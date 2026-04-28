@@ -52,7 +52,7 @@ export async function sendVerificationEmail(params: {
     body: JSON.stringify({
       sender: {
         email: process.env.EMAIL_FROM,
-        name: "CV Scanner",
+        name: "Lệ HR - CV Manager Scanner",
       },
       to: [
         {
@@ -60,12 +60,12 @@ export async function sendVerificationEmail(params: {
           name: params.toName,
         },
       ],
-      subject: "Xac nhan email dang ky CV Scanner",
+      subject: "Xac nhan email dang ky Le HR - CV Manager Scanner",
       htmlContent: `
         <div style="font-family:Arial,sans-serif;line-height:1.6;color:#1f2937">
           <h2 style="margin-bottom:12px">Xac nhan email cua ban</h2>
           <p>Xin chao ${params.toName},</p>
-          <p>Nhan vao nut ben duoi de xac nhan email va kich hoat tai khoan CV Scanner.</p>
+          <p>Nhan vao nut ben duoi de xac nhan email va kich hoat tai khoan Le HR - CV Manager Scanner.</p>
           <p style="margin:24px 0">
             <a
               href="${params.verificationUrl}"
