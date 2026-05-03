@@ -8,15 +8,15 @@ datasource db {
 }
 
 model User {
-  id        String   @id @default(cuid())
-  name      String
-  email     String   @unique
-  password  String
-  role      String   @default("USER")
-  emailVerifiedAt               DateTime?
-  emailVerificationTokenHash    String?  @unique
+  id                              String    @id @default(cuid())
+  name                            String
+  email                           String    @unique
+  password                        String
+  role                            String    @default("USER")
+  emailVerifiedAt                 DateTime?
+  emailVerificationTokenHash      String?   @unique
   emailVerificationTokenExpiresAt DateTime?
-  createdAt DateTime @default(now())
+  createdAt                       DateTime  @default(now())
 
   ownedWorkspaces  Workspace[]       @relation("WorkspaceOwner")
   workspaceMembers WorkspaceMember[]
@@ -40,11 +40,11 @@ model Workspace {
 }
 
 model WorkspaceMember {
-  id          String        @id @default(cuid())
+  id          String   @id @default(cuid())
   workspaceId String
   userId      String
-  role        String        @default("HR")
-  joinedAt    DateTime      @default(now())
+  role        String   @default("HR")
+  joinedAt    DateTime @default(now())
 
   workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
   user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
@@ -53,17 +53,17 @@ model WorkspaceMember {
 }
 
 model CVFile {
-  id          String   @id @default(cuid())
-  workspaceId String
-  uploadedBy  String
-  fileName    String
-  filePath    String?
-  mimeType    String?
-  fileSize    Int
-  rawText     String
+  id                  String    @id @default(cuid())
+  workspaceId         String
+  uploadedBy          String
+  fileName            String
+  filePath            String?
+  mimeType            String?
+  fileSize            Int
+  rawText             String
   rawTextArchivedPath String?
-  rawTextArchivedAt DateTime?
-  uploadedAt  DateTime @default(now())
+  rawTextArchivedAt   DateTime?
+  uploadedAt          DateTime  @default(now())
 
   workspace Workspace  @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
   uploader  User       @relation("FileUploader", fields: [uploadedBy], references: [id], onDelete: Cascade)
@@ -89,29 +89,30 @@ model Candidate {
   skillsJson        String?
   summary           String?
 
-  position          String?
-  source            String?
-  offerSalary       String?
-  notes             String?
-  interviewDate     String?
-  interviewerName   String?
-  interviewFeedback String?
-  managerDecision   String?
-  managerOfferSalary String?
-  managerReviewNote String?
-  managerReviewedAt DateTime?
+  position            String?
+  source              String?
+  expectedSalary      String?
+  offerSalary         String?
+  notes               String?
+  interviewDate       String?
+  interviewerName     String?
+  interviewFeedback   String?
+  managerDecision     String?
+  managerOfferSalary  String?
+  managerReviewNote   String?
+  managerReviewedAt   DateTime?
   managerReviewedById String?
 
-  status    String          @default("NEW")
-  createdAt DateTime        @default(now())
-  updatedAt DateTime        @updatedAt
+  status    String   @default("NEW")
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 
-  workspace     Workspace       @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
-  hr            User            @relation("CandidateHR", fields: [hrId], references: [id], onDelete: Cascade)
-  cvFile        CVFile?         @relation(fields: [cvFileId], references: [id], onDelete: SetNull)
-  project       Project?        @relation(fields: [projectId], references: [id], onDelete: SetNull)
-  managerReviewedBy User?       @relation("CandidateManagerReviewer", fields: [managerReviewedById], references: [id], onDelete: SetNull)
-  statusHistory StatusHistory[]
+  workspace         Workspace       @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  hr                User            @relation("CandidateHR", fields: [hrId], references: [id], onDelete: Cascade)
+  cvFile            CVFile?         @relation(fields: [cvFileId], references: [id], onDelete: SetNull)
+  project           Project?        @relation(fields: [projectId], references: [id], onDelete: SetNull)
+  managerReviewedBy User?           @relation("CandidateManagerReviewer", fields: [managerReviewedById], references: [id], onDelete: SetNull)
+  statusHistory     StatusHistory[]
 }
 
 model Project {
@@ -129,13 +130,13 @@ model Project {
 }
 
 model StatusHistory {
-  id          String           @id @default(cuid())
+  id          String   @id @default(cuid())
   candidateId String
   fromStatus  String?
   toStatus    String
   note        String?
   changedBy   String
-  changedAt   DateTime         @default(now())
+  changedAt   DateTime @default(now())
 
   candidate     Candidate @relation(fields: [candidateId], references: [id], onDelete: Cascade)
   changedByUser User      @relation(fields: [changedBy], references: [id], onDelete: Cascade)

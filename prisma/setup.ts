@@ -111,6 +111,7 @@ CREATE TABLE "Candidate" (
   "summary" TEXT,
   "position" TEXT,
   "source" TEXT,
+  "expectedSalary" TEXT,
   "offerSalary" TEXT,
   "notes" TEXT,
   "interviewDate" TEXT,
@@ -164,7 +165,8 @@ PRAGMA foreign_keys = ON;
 
 async function main() {
   const SQL = await initSqlJs({
-    locateFile: (file) => path.join(process.cwd(), "node_modules", "sql.js", "dist", file),
+    locateFile: (file) =>
+      path.join(process.cwd(), "node_modules", "sql.js", "dist", file),
   });
 
   const db = new SQL.Database();

@@ -6,11 +6,23 @@ import bcrypt from "bcryptjs";
 import { z } from "zod";
 
 import { deleteUploadedFile, getPathSize } from "@/lib/files";
-import { cleanupOldLogs, deleteLogFile, getLogFile, listLogFiles } from "@/lib/logs";
+import {
+  cleanupOldLogs,
+  deleteLogFile,
+  getLogFile,
+  listLogFiles,
+} from "@/lib/logs";
 import { prisma } from "@/lib/prisma";
 import { CANDIDATE_STATUSES, MANAGER_DECISIONS, ROLES } from "@/types";
 
-export const adminResourceNames = ["users", "workspaces", "candidates", "projects", "files", "logs"] as const;
+export const adminResourceNames = [
+  "users",
+  "workspaces",
+  "candidates",
+  "projects",
+  "files",
+  "logs",
+] as const;
 export type AdminResourceName = (typeof adminResourceNames)[number];
 
 const userCreateSchema = z.object({
@@ -42,10 +54,13 @@ const candidateUpdateSchema = z.object({
   phone: z.string().nullable().optional(),
   position: z.string().nullable().optional(),
   source: z.string().nullable().optional(),
+  expectedSalary: z.string().nullable().optional(),
   offerSalary: z.string().nullable().optional(),
   notes: z.string().nullable().optional(),
   status: z.enum(CANDIDATE_STATUSES).optional(),
-  managerDecision: z.union([z.enum(MANAGER_DECISIONS), z.literal(""), z.null()]).optional(),
+  managerDecision: z
+    .union([z.enum(MANAGER_DECISIONS), z.literal(""), z.null()])
+    .optional(),
   managerOfferSalary: z.string().nullable().optional(),
   managerReviewNote: z.string().nullable().optional(),
 });
@@ -70,7 +85,8 @@ function parseListQuery(url: URL) {
 
   return {
     page: Number.isFinite(page) && page > 0 ? page : 1,
-    perPage: Number.isFinite(perPage) && perPage > 0 ? Math.min(perPage, 100) : 25,
+    perPage:
+      Number.isFinite(perPage) && perPage > 0 ? Math.min(perPage, 100) : 25,
     sort,
     order: order as "asc" | "desc",
     filter,
@@ -116,7 +132,9 @@ export async function listAdminResource(resource: string, url: URL) {
         prisma.user.findMany({
           where,
           orderBy: {
-            [sort === "name" || sort === "email" || sort === "role" ? sort : "createdAt"]: order,
+            [sort === "name" || sort === "email" || sort === "role"
+              ? sort
+              : "createdAt"]: order,
           },
           skip,
           take: perPage,
@@ -192,7 +210,9 @@ export async function listAdminResource(resource: string, url: URL) {
         prisma.candidate.findMany({
           where,
           orderBy: {
-            [sort === "fullName" || sort === "status" || sort === "updatedAt" ? sort : "createdAt"]: order,
+            [sort === "fullName" || sort === "status" || sort === "updatedAt"
+              ? sort
+              : "createdAt"]: order,
           },
           skip,
           take: perPage,
@@ -220,6 +240,7 @@ export async function listAdminResource(resource: string, url: URL) {
           hrName: item.hr.name,
           projectId: item.projectId,
           projectName: item.project?.name ?? null,
+          expectedSalary: item.expectedSalary,
           offerSalary: item.offerSalary,
           notes: item.notes,
           managerDecision: item.managerDecision,
@@ -237,7 +258,8 @@ export async function listAdminResource(resource: string, url: URL) {
         prisma.project.findMany({
           where,
           orderBy: {
-            [sort === "name" || sort === "updatedAt" ? sort : "createdAt"]: order,
+            [sort === "name" || sort === "updatedAt" ? sort : "createdAt"]:
+              order,
           },
           skip,
           take: perPage,
@@ -267,7 +289,8 @@ export async function listAdminResource(resource: string, url: URL) {
         prisma.cVFile.findMany({
           where,
           orderBy: {
-            [sort === "fileName" || sort === "fileSize" ? sort : "uploadedAt"]: order,
+            [sort === "fileName" || sort === "fileSize" ? sort : "uploadedAt"]:
+              order,
           },
           skip,
           take: perPage,
@@ -373,6 +396,7 @@ export async function getAdminResource(resource: string, id: string) {
         hrName: item.hr.name,
         projectId: item.projectId,
         projectName: item.project?.name ?? null,
+        expectedSalary: item.expectedSalary,
         offerSalary: item.offerSalary,
         notes: item.notes,
         managerDecision: item.managerDecision,
@@ -500,7 +524,11 @@ export async function updateAdminResource(
       });
       if (!existingUser) throw new Error("NOT_FOUND");
 
-      if (existingUser.id === currentUserId && parsed.data.role && parsed.data.role !== "ADMIN") {
+      if (
+        existingUser.id === currentUserId &&
+        parsed.data.role &&
+        parsed.data.role !== "ADMIN"
+      ) {
         throw new Error("CANNOT_DEMOTE_SELF");
       }
 
@@ -530,7 +558,9 @@ export async function updateAdminResource(
           name: parsed.data.name,
           email,
           role: parsed.data.role,
-          password: parsed.data.password ? await bcrypt.hash(parsed.data.password, 10) : undefined,
+          password: parsed.data.password
+            ? await bcrypt.hash(parsed.data.password, 10)
+            : undefined,
           emailVerifiedAt: email ? new Date() : undefined,
           emailVerificationTokenHash: email ? null : undefined,
           emailVerificationTokenExpiresAt: email ? null : undefined,
@@ -607,6 +637,7 @@ export async function updateAdminResource(
           phone: asNullableString(parsed.data.phone),
           position: asNullableString(parsed.data.position),
           source: asNullableString(parsed.data.source),
+          expectedSalary: asNullableString(parsed.data.expectedSalary),
           offerSalary: asNullableString(parsed.data.offerSalary),
           notes: asNullableString(parsed.data.notes),
           status: parsed.data.status,
@@ -652,6 +683,7 @@ export async function updateAdminResource(
         hrName: candidate.hr.name,
         projectId: candidate.projectId,
         projectName: candidate.project?.name ?? null,
+        expectedSalary: candidate.expectedSalary,
         offerSalary: candidate.offerSalary,
         notes: candidate.notes,
         managerDecision: candidate.managerDecision,
@@ -697,7 +729,11 @@ export async function updateAdminResource(
   }
 }
 
-export async function deleteAdminResource(resource: string, id: string, currentUserId: string) {
+export async function deleteAdminResource(
+  resource: string,
+  id: string,
+  currentUserId: string,
+) {
   if (!hasResourceName(resource)) {
     throw new Error("NOT_FOUND");
   }
@@ -713,7 +749,8 @@ export async function deleteAdminResource(resource: string, id: string, currentU
       });
 
       if (!existingUser) throw new Error("NOT_FOUND");
-      if (existingUser.id === currentUserId) throw new Error("CANNOT_DELETE_SELF");
+      if (existingUser.id === currentUserId)
+        throw new Error("CANNOT_DELETE_SELF");
       if (existingUser.role === "ADMIN" && (await countAdmins()) <= 1) {
         throw new Error("LAST_ADMIN");
       }
@@ -771,7 +808,10 @@ type CpuSnapshot = {
 function getCpuSnapshot(): CpuSnapshot {
   return os.cpus().reduce(
     (snapshot, cpu) => {
-      const total = Object.values(cpu.times).reduce((sum, value) => sum + value, 0);
+      const total = Object.values(cpu.times).reduce(
+        (sum, value) => sum + value,
+        0,
+      );
       return {
         idle: snapshot.idle + cpu.times.idle,
         total: snapshot.total + total,
@@ -798,7 +838,16 @@ export async function getAdminMonitor() {
   const uploadsRoot = path.join(process.cwd(), "public", "uploads");
   const sqlitePath = path.join(process.cwd(), "prisma", "dev.db");
 
-  const [users, workspaces, candidates, projects, files, uploadsBytes, sqliteBytes, cpuUsagePercent] = await Promise.all([
+  const [
+    users,
+    workspaces,
+    candidates,
+    projects,
+    files,
+    uploadsBytes,
+    sqliteBytes,
+    cpuUsagePercent,
+  ] = await Promise.all([
     prisma.user.count(),
     prisma.workspace.count(),
     prisma.candidate.count(),
@@ -816,7 +865,10 @@ export async function getAdminMonitor() {
     getCpuUsagePercent(),
   ]);
 
-  const workspaceStorageMap = new Map<string, { workspaceId: string; workspaceName: string; bytes: number }>();
+  const workspaceStorageMap = new Map<
+    string,
+    { workspaceId: string; workspaceName: string; bytes: number }
+  >();
   for (const file of files) {
     const existing = workspaceStorageMap.get(file.workspaceId) ?? {
       workspaceId: file.workspaceId,
@@ -888,7 +940,8 @@ export async function getAdminMonitor() {
         totalBytes: memoryTotalBytes,
         freeBytes: memoryFreeBytes,
         usedBytes: memoryUsedBytes,
-        usagePercent: memoryTotalBytes > 0 ? (memoryUsedBytes / memoryTotalBytes) * 100 : 0,
+        usagePercent:
+          memoryTotalBytes > 0 ? (memoryUsedBytes / memoryTotalBytes) * 100 : 0,
       },
       process: {
         rssBytes: processMemory.rss,
@@ -900,10 +953,12 @@ export async function getAdminMonitor() {
     topWorkspacesByStorage: Array.from(workspaceStorageMap.values())
       .sort((left, right) => right.bytes - left.bytes)
       .slice(0, 8),
-    statusDistribution: Array.from(statusMap.entries()).map(([status, count]) => ({
-      status,
-      count,
-    })),
+    statusDistribution: Array.from(statusMap.entries()).map(
+      ([status, count]) => ({
+        status,
+        count,
+      }),
+    ),
     recentUploads: files.slice(0, 8).map((file) => ({
       id: file.id,
       fileName: file.fileName,

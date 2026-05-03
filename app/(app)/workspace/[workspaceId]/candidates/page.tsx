@@ -27,14 +27,20 @@ export default async function CandidatesPage({
   const { workspaceId } = await params;
   const filters = await searchParams;
 
-  let membership: Awaited<ReturnType<typeof requireWorkspaceAccess>> | null = null;
+  let membership: Awaited<ReturnType<typeof requireWorkspaceAccess>> | null =
+    null;
   try {
-    membership = await requireWorkspaceAccess(workspaceId, session.user.id, session.user.role);
+    membership = await requireWorkspaceAccess(
+      workspaceId,
+      session.user.id,
+      session.user.role,
+    );
   } catch {
     notFound();
   }
 
-  const isManager = session.user.role !== "ADMIN" && membership!.membershipRole === "MANAGER";
+  const isManager =
+    session.user.role !== "ADMIN" && membership!.membershipRole === "MANAGER";
 
   const [workspace, members, projects, candidates] = await Promise.all([
     prisma.workspace.findUnique({ where: { id: workspaceId } }),
@@ -61,7 +67,9 @@ export default async function CandidatesPage({
           : {}),
         ...(filters.status ? { status: filters.status } : {}),
         ...(filters.hrId ? { hrId: filters.hrId } : {}),
-        ...(filters.position ? { position: { contains: filters.position } } : {}),
+        ...(filters.position
+          ? { position: { contains: filters.position } }
+          : {}),
         ...(filters.projectId ? { projectId: filters.projectId } : {}),
       },
       include: {
@@ -83,8 +91,12 @@ export default async function CandidatesPage({
 
         <div className="relative flex flex-col gap-6 xl:flex-row xl:items-end xl:justify-between">
           <div className="max-w-3xl">
-            <p className="text-sm font-black uppercase tracking-[0.18em] text-primary">Kho CV</p>
-            <h1 className="mt-3 text-4xl font-black tracking-tight text-on-surface">Danh sách ứng viên</h1>
+            <p className="text-sm font-black uppercase tracking-[0.18em] text-primary">
+              Kho CV
+            </p>
+            <h1 className="mt-3 text-4xl font-black tracking-tight text-on-surface">
+              Danh sách ứng viên
+            </h1>
             <p className="mt-3 text-base font-medium leading-8 text-on-surface-variant">
               {isManager
                 ? "Xem nhanh danh sách đã được lọc sẵn, mở CV và duyệt đề xuất tuyển dụng ngay trên từng ứng viên."
@@ -94,8 +106,12 @@ export default async function CandidatesPage({
 
           <div className="flex flex-wrap gap-3">
             <div className="rounded-[1.4rem] bg-surface-container-low px-4 py-3">
-              <p className="text-[11px] font-black uppercase tracking-[0.16em] text-outline">Workspace</p>
-              <p className="mt-1 text-sm font-black text-on-surface">{workspace.name}</p>
+              <p className="text-[11px] font-black uppercase tracking-[0.16em] text-outline">
+                Workspace
+              </p>
+              <p className="mt-1 text-sm font-black text-on-surface">
+                {workspace.name}
+              </p>
             </div>
             {!isManager ? (
               <Link href={`/workspace/${workspaceId}/candidates/upload`}>
@@ -130,8 +146,14 @@ export default async function CandidatesPage({
         candidates={candidates.map((candidate) => ({
           id: candidate.id,
           fullName: candidate.fullName,
+          email: candidate.email,
+          phone: candidate.phone,
+          summary: candidate.summary,
           position: candidate.position,
           source: candidate.source,
+          expectedSalary: candidate.expectedSalary,
+          offerSalary: candidate.offerSalary,
+          notes: candidate.notes,
           status: candidate.status,
           createdAt: candidate.createdAt,
           interviewDate: candidate.interviewDate,

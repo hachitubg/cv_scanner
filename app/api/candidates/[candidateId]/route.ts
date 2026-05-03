@@ -28,6 +28,7 @@ const candidateUpdateSchema = z.object({
   summary: z.string().optional(),
   position: z.string().optional(),
   source: z.string().optional(),
+  expectedSalary: z.string().optional(),
   offerSalary: z.string().optional(),
   notes: z.string().optional(),
   interviewDate: z.string().optional(),
@@ -38,7 +39,9 @@ const candidateUpdateSchema = z.object({
   projectId: z.string().nullable().optional(),
   status: z.enum(CANDIDATE_STATUSES).optional(),
   statusNote: z.string().optional(),
-  managerDecision: z.union([z.enum(MANAGER_DECISIONS), z.literal("")]).optional(),
+  managerDecision: z
+    .union([z.enum(MANAGER_DECISIONS), z.literal("")])
+    .optional(),
   managerOfferSalary: z.string().optional(),
   managerReviewNote: z.string().optional(),
 });
@@ -55,7 +58,10 @@ function requiresInterviewDetails(status: string) {
   return status === "INTERVIEW" || status === "INTERVIEWED";
 }
 
-async function ensureProjectInWorkspace(projectId: string | null, workspaceId: string) {
+async function ensureProjectInWorkspace(
+  projectId: string | null,
+  workspaceId: string,
+) {
   if (!projectId) return null;
 
   const project = await prisma.project.findFirst({
@@ -93,7 +99,10 @@ async function ensureAssignableHr(workspaceId: string, hrId: string) {
   return membership.userId;
 }
 
-export async function GET(_: Request, { params }: { params: Promise<{ candidateId: string }> }) {
+export async function GET(
+  _: Request,
+  { params }: { params: Promise<{ candidateId: string }> },
+) {
   const session = await auth();
   if (!session?.user) {
     return NextResponse.json({ error: "Bạn chưa đăng nhập." }, { status: 401 });
@@ -111,7 +120,10 @@ export async function GET(_: Request, { params }: { params: Promise<{ candidateI
             ? "Không tìm thấy ứng viên."
             : "Bạn không có quyền xem ứng viên này.",
       },
-      { status: error instanceof Error && error.message === "NOT_FOUND" ? 404 : 403 },
+      {
+        status:
+          error instanceof Error && error.message === "NOT_FOUND" ? 404 : 403,
+      },
     );
   }
 
@@ -162,7 +174,10 @@ export async function PATCH(
             ? "Không tìm thấy ứng viên."
             : "Bạn không có quyền cập nhật ứng viên này.",
       },
-      { status: error instanceof Error && error.message === "NOT_FOUND" ? 404 : 403 },
+      {
+        status:
+          error instanceof Error && error.message === "NOT_FOUND" ? 404 : 403,
+      },
     );
   }
 
@@ -178,7 +193,9 @@ export async function PATCH(
   const submittedKeys = Object.entries(body)
     .filter(([, value]) => value !== undefined)
     .map(([key]) => key);
-  const isManagerSession = session.user.role !== "ADMIN" && isManagerMembership(membership.membershipRole);
+  const isManagerSession =
+    session.user.role !== "ADMIN" &&
+    isManagerMembership(membership.membershipRole);
   const canEditCandidateData = canEditWorkspaceCandidate(
     currentCandidate.hrId,
     session.user.id,
@@ -187,14 +204,22 @@ export async function PATCH(
   );
 
   if (isManagerSession) {
-    const disallowedKeys = submittedKeys.filter((key) => !managerEditableKeys.has(key));
+    const disallowedKeys = submittedKeys.filter(
+      (key) => !managerEditableKeys.has(key),
+    );
     if (disallowedKeys.length) {
       return NextResponse.json(
-        { error: "Tài khoản Quản lý chỉ được đánh giá và chốt kết quả nhân sự." },
+        {
+          error: "Tài khoản Quản lý chỉ được đánh giá và chốt kết quả nhân sự.",
+        },
         { status: 403 },
       );
     }
-  } else if (submittedKeys.length && !canEditCandidateData && session.user.role !== "ADMIN") {
+  } else if (
+    submittedKeys.length &&
+    !canEditCandidateData &&
+    session.user.role !== "ADMIN"
+  ) {
     return NextResponse.json(
       { error: "HR chỉ được cập nhật các CV do mình phụ trách." },
       { status: 403 },
@@ -202,30 +227,55 @@ export async function PATCH(
   }
 
   const hasManagerReviewUpdate = submittedKeys.some((key) =>
-    ["managerDecision", "managerOfferSalary", "managerReviewNote"].includes(key),
+    ["managerDecision", "managerOfferSalary", "managerReviewNote"].includes(
+      key,
+    ),
   );
-  if (hasManagerReviewUpdate && !isWorkspaceManagerOrAdmin(membership.membershipRole, session.user.role)) {
+  if (
+    hasManagerReviewUpdate &&
+    !isWorkspaceManagerOrAdmin(membership.membershipRole, session.user.role)
+  ) {
     return NextResponse.json(
-      { error: "Chỉ Quản lý, HR Admin hoặc Admin mới có thể duyệt đề xuất tuyển dụng." },
+      {
+        error:
+          "Chỉ Quản lý, HR Admin hoặc Admin mới có thể duyệt đề xuất tuyển dụng.",
+      },
       { status: 403 },
     );
   }
 
-  if (!canManagerUpdateCandidateStatus(parsed.data.status, membership.membershipRole, session.user.role)) {
+  if (
+    !canManagerUpdateCandidateStatus(
+      parsed.data.status,
+      membership.membershipRole,
+      session.user.role,
+    )
+  ) {
     return NextResponse.json(
-      { error: "Quản lý chỉ được chốt các trạng thái cuối như offer, từ chối hoặc nhận việc." },
+      {
+        error:
+          "Quản lý chỉ được chốt các trạng thái cuối như offer, từ chối hoặc nhận việc.",
+      },
       { status: 403 },
     );
   }
 
   const nextStatus = parsed.data.status;
   const resolvedStatus = nextStatus ?? currentCandidate.status;
-  const nextInterviewDate = parsed.data.interviewDate ?? currentCandidate.interviewDate ?? "";
-  const nextInterviewerName = parsed.data.interviewerName ?? currentCandidate.interviewerName ?? "";
+  const nextInterviewDate =
+    parsed.data.interviewDate ?? currentCandidate.interviewDate ?? "";
+  const nextInterviewerName =
+    parsed.data.interviewerName ?? currentCandidate.interviewerName ?? "";
 
-  if (requiresInterviewDetails(resolvedStatus) && (!nextInterviewDate.trim() || !nextInterviewerName.trim())) {
+  if (
+    requiresInterviewDetails(resolvedStatus) &&
+    (!nextInterviewDate.trim() || !nextInterviewerName.trim())
+  ) {
     return NextResponse.json(
-      { error: "Khi chuyển sang trạng thái phỏng vấn, cần nhập ngày phỏng vấn và người phỏng vấn." },
+      {
+        error:
+          "Khi chuyển sang trạng thái phỏng vấn, cần nhập ngày phỏng vấn và người phỏng vấn.",
+      },
       { status: 400 },
     );
   }
@@ -233,10 +283,16 @@ export async function PATCH(
   let projectId = currentCandidate.projectId;
   if (parsed.data.projectId !== undefined) {
     try {
-      projectId = await ensureProjectInWorkspace(parsed.data.projectId, currentCandidate.workspaceId);
+      projectId = await ensureProjectInWorkspace(
+        parsed.data.projectId,
+        currentCandidate.workspaceId,
+      );
     } catch (error) {
       if (error instanceof Error && error.message === "PROJECT_NOT_FOUND") {
-        return NextResponse.json({ error: "Dự án đã chọn không thuộc workspace này." }, { status: 400 });
+        return NextResponse.json(
+          { error: "Dự án đã chọn không thuộc workspace này." },
+          { status: 400 },
+        );
       }
       throw error;
     }
@@ -245,15 +301,29 @@ export async function PATCH(
   let hrId = currentCandidate.hrId;
   if (parsed.data.hrId !== undefined) {
     if (
-      !canAssignCandidateToHr(parsed.data.hrId, session.user.id, membership.membershipRole, session.user.role)
+      !canAssignCandidateToHr(
+        parsed.data.hrId,
+        session.user.id,
+        membership.membershipRole,
+        session.user.role,
+      )
     ) {
-      return NextResponse.json({ error: "HR chỉ được nhận CV của chính mình." }, { status: 403 });
+      return NextResponse.json(
+        { error: "HR chỉ được nhận CV của chính mình." },
+        { status: 403 },
+      );
     }
 
     try {
-      hrId = await ensureAssignableHr(currentCandidate.workspaceId, parsed.data.hrId);
+      hrId = await ensureAssignableHr(
+        currentCandidate.workspaceId,
+        parsed.data.hrId,
+      );
     } catch {
-      return NextResponse.json({ error: "Người phụ trách phải là HR hoặc HR Admin trong workspace." }, { status: 400 });
+      return NextResponse.json(
+        { error: "Người phụ trách phải là HR hoặc HR Admin trong workspace." },
+        { status: 400 },
+      );
     }
   }
 
@@ -284,6 +354,7 @@ export async function PATCH(
             summary: parsed.data.summary,
             position: parsed.data.position,
             source: parsed.data.source,
+            expectedSalary: parsed.data.expectedSalary,
             offerSalary: parsed.data.offerSalary,
             notes: parsed.data.notes,
             interviewDate: parsed.data.interviewDate,
@@ -291,7 +362,9 @@ export async function PATCH(
             interviewFeedback: parsed.data.interviewFeedback,
             hrId,
             projectId,
-            skillsJson: parsed.data.skills ? stringifySkills(parsed.data.skills) : undefined,
+            skillsJson: parsed.data.skills
+              ? stringifySkills(parsed.data.skills)
+              : undefined,
             status: nextStatus ?? undefined,
           }),
       ...(hasManagerReviewUpdate
@@ -334,8 +407,16 @@ export async function DELETE(
 
   let permission;
   try {
-    permission = await canManageCandidate(candidateId, session.user.id, session.user.role);
-    await requireWorkspaceHrAdmin(permission.candidate.workspaceId, session.user.id, session.user.role);
+    permission = await canManageCandidate(
+      candidateId,
+      session.user.id,
+      session.user.role,
+    );
+    await requireWorkspaceHrAdmin(
+      permission.candidate.workspaceId,
+      session.user.id,
+      session.user.role,
+    );
   } catch (error) {
     return NextResponse.json(
       {
@@ -344,7 +425,10 @@ export async function DELETE(
             ? "Không tìm thấy ứng viên."
             : "Bạn không có quyền xóa ứng viên này.",
       },
-      { status: error instanceof Error && error.message === "NOT_FOUND" ? 404 : 403 },
+      {
+        status:
+          error instanceof Error && error.message === "NOT_FOUND" ? 404 : 403,
+      },
     );
   }
 

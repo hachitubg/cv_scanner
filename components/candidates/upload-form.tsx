@@ -8,7 +8,12 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { cn } from "@/lib/utils";
-import type { ParsedCVResult, ProjectOption, WorkspaceMemberOption, WorkspaceRoleType } from "@/types";
+import type {
+  ParsedCVResult,
+  ProjectOption,
+  WorkspaceMemberOption,
+  WorkspaceRoleType,
+} from "@/types";
 
 const GEMINI_KEY_STORAGE = "cv_scanner_gemini_api_key";
 const GEMINI_MODEL_STORAGE = "cv_scanner_gemini_model";
@@ -34,6 +39,7 @@ const EMPTY_FORM = {
   summary: "",
   position: "",
   source: "",
+  expectedSalary: "",
   offerSalary: "",
   notes: "",
   interviewFeedback: "",
@@ -86,7 +92,8 @@ export function UploadCandidateForm({
   const [geminiModels, setGeminiModels] = useState<GeminiModelOption[]>([]);
   const [modelsError, setModelsError] = useState<string | null>(null);
   const [isGeminiModalOpen, setIsGeminiModalOpen] = useState(false);
-  const [shouldRunAiScanAfterSave, setShouldRunAiScanAfterSave] = useState(false);
+  const [shouldRunAiScanAfterSave, setShouldRunAiScanAfterSave] =
+    useState(false);
   const [scanMessage, setScanMessage] = useState<string | null>(null);
   const [scanError, setScanError] = useState<string | null>(null);
   const [submitError, setSubmitError] = useState<string | null>(null);
@@ -95,8 +102,10 @@ export function UploadCandidateForm({
   const [isLoadingModels, startLoadModels] = useTransition();
 
   useEffect(() => {
-    const storedGeminiApiKey = window.localStorage.getItem(GEMINI_KEY_STORAGE) ?? "";
-    const storedGeminiModel = window.localStorage.getItem(GEMINI_MODEL_STORAGE) ?? "";
+    const storedGeminiApiKey =
+      window.localStorage.getItem(GEMINI_KEY_STORAGE) ?? "";
+    const storedGeminiModel =
+      window.localStorage.getItem(GEMINI_MODEL_STORAGE) ?? "";
     const timer = window.setTimeout(() => {
       setGeminiApiKey(storedGeminiApiKey);
       setGeminiApiKeyDraft(storedGeminiApiKey);
@@ -108,11 +117,20 @@ export function UploadCandidateForm({
   }, []);
 
   const hasScannedData = useMemo(() => {
-    return Boolean(form.fullName || form.email || form.phone || form.position || form.summary || form.notes);
+    return Boolean(
+      form.fullName ||
+      form.email ||
+      form.phone ||
+      form.position ||
+      form.summary ||
+      form.notes,
+    );
   }, [form]);
 
   const selectedGeminiModel = useMemo(
-    () => geminiModels.find((item) => item.id === geminiModel) ?? geminiModels.find((item) => item.id === geminiModelDraft),
+    () =>
+      geminiModels.find((item) => item.id === geminiModel) ??
+      geminiModels.find((item) => item.id === geminiModelDraft),
     [geminiModel, geminiModelDraft, geminiModels],
   );
 
@@ -132,7 +150,9 @@ export function UploadCandidateForm({
       school: data.school ?? current.school,
       graduationYear: data.graduationYear ?? current.graduationYear,
       yearsOfExperience:
-        data.yearsOfExperience !== undefined ? String(data.yearsOfExperience) : current.yearsOfExperience,
+        data.yearsOfExperience !== undefined
+          ? String(data.yearsOfExperience)
+          : current.yearsOfExperience,
       position: data.position ?? current.position,
       summary: data.summary ?? current.summary,
       skills: data.skills?.join(", ") ?? current.skills,
@@ -156,11 +176,16 @@ export function UploadCandidateForm({
         },
       });
 
-      const data = (await response.json()) as { error?: string; models?: GeminiModelOption[] };
+      const data = (await response.json()) as {
+        error?: string;
+        models?: GeminiModelOption[];
+      };
 
       if (!response.ok || !data.models?.length) {
         setGeminiModels([]);
-        setModelsError(data.error || "Không thể tải danh sách model từ Gemini.");
+        setModelsError(
+          data.error || "Không thể tải danh sách model từ Gemini.",
+        );
         return;
       }
 
@@ -188,7 +213,10 @@ export function UploadCandidateForm({
     }
   }
 
-  function performScan(mode: "basic" | "ai", options?: { apiKey?: string; model?: string }) {
+  function performScan(
+    mode: "basic" | "ai",
+    options?: { apiKey?: string; model?: string },
+  ) {
     if (!file) {
       setScanError("Hãy chọn file CV trước khi scan.");
       return;
@@ -207,11 +235,16 @@ export function UploadCandidateForm({
 
       const response = await fetch("/api/scan", {
         method: "POST",
-        headers: mode === "ai" && options?.apiKey ? { "x-gemini-api-key": options.apiKey } : undefined,
+        headers:
+          mode === "ai" && options?.apiKey
+            ? { "x-gemini-api-key": options.apiKey }
+            : undefined,
         body,
       });
 
-      const data = (await response.json()) as ParsedCVResult & { error?: string };
+      const data = (await response.json()) as ParsedCVResult & {
+        error?: string;
+      };
 
       if (!response.ok) {
         setScanError(data.error || "Không thể scan CV.");
@@ -310,11 +343,15 @@ export function UploadCandidateForm({
           <div className="bubbly-card border-dashed p-6">
             <div className="flex flex-wrap items-start justify-between gap-4">
               <div>
-                <p className="text-sm font-black uppercase tracking-[0.18em] text-primary">Bước 1</p>
-                <h3 className="mt-3 text-2xl font-black text-on-surface">Tải lên CV</h3>
+                <p className="text-sm font-black uppercase tracking-[0.18em] text-primary">
+                  Bước 1
+                </p>
+                <h3 className="mt-3 text-2xl font-black text-on-surface">
+                  Tải lên CV
+                </h3>
                 <p className="mt-2 text-sm font-medium text-on-surface-variant">
-                  Hỗ trợ PDF, DOCX, TXT và ảnh PNG/JPG/JPEG/WEBP. OCR được dùng cho file ảnh và PDF scan không có text
-                  layer.
+                  Hỗ trợ PDF, DOCX, TXT và ảnh PNG/JPG/JPEG/WEBP. OCR được dùng
+                  cho file ảnh và PDF scan không có text layer.
                 </p>
               </div>
 
@@ -330,15 +367,23 @@ export function UploadCandidateForm({
 
             <div className="mt-4 grid gap-3 sm:grid-cols-2">
               <div className="rounded-[1.4rem] bg-surface-container-low px-4 py-3">
-                <p className="text-[11px] font-black uppercase tracking-[0.16em] text-outline">Gemini API Key</p>
+                <p className="text-[11px] font-black uppercase tracking-[0.16em] text-outline">
+                  Gemini API Key
+                </p>
                 <p className="mt-2 text-sm font-semibold text-on-surface">
-                  {geminiApiKey ? `Đã cấu hình: ${maskApiKey(geminiApiKey)}` : "Chưa cấu hình API Key"}
+                  {geminiApiKey
+                    ? `Đã cấu hình: ${maskApiKey(geminiApiKey)}`
+                    : "Chưa cấu hình API Key"}
                 </p>
               </div>
               <div className="rounded-[1.4rem] bg-surface-container-low px-4 py-3">
-                <p className="text-[11px] font-black uppercase tracking-[0.16em] text-outline">Model đang chọn</p>
+                <p className="text-[11px] font-black uppercase tracking-[0.16em] text-outline">
+                  Model đang chọn
+                </p>
                 <p className="mt-2 text-sm font-semibold text-on-surface">
-                  {selectedGeminiModel?.displayName || geminiModel || "Chưa chọn model"}
+                  {selectedGeminiModel?.displayName ||
+                    geminiModel ||
+                    "Chưa chọn model"}
                 </p>
               </div>
             </div>
@@ -350,33 +395,67 @@ export function UploadCandidateForm({
                 className="hidden"
                 onChange={(event) => setFile(event.target.files?.[0] ?? null)}
               />
-              <p className="text-lg font-black text-on-surface">{file?.name || "Chọn file từ máy"}</p>
+              <p className="text-lg font-black text-on-surface">
+                {file?.name || "Chọn file từ máy"}
+              </p>
               <p className="mt-2 text-sm font-medium text-on-surface-variant">
-                {file ? `${Math.round(file.size / 1024)} KB` : "Kéo thả hoặc click để chọn"}
+                {file
+                  ? `${Math.round(file.size / 1024)} KB`
+                  : "Kéo thả hoặc click để chọn"}
               </p>
             </label>
 
             <div className="mt-6 grid gap-3 sm:grid-cols-3">
-              <Button className="w-full" onClick={() => performScan("basic")} disabled={isScanning}>
+              <Button
+                className="w-full"
+                onClick={() => performScan("basic")}
+                disabled={isScanning}
+              >
                 {isScanning ? "Đang scan..." : "Scan CV"}
               </Button>
-              <Button variant="secondary" className="w-full gap-2" onClick={handleAiScan} disabled={isScanning}>
+              <Button
+                variant="secondary"
+                className="w-full gap-2"
+                onClick={handleAiScan}
+                disabled={isScanning}
+              >
                 <Sparkles className="size-4" />
                 {isScanning ? "Đang AI Scan..." : "AI Scan"}
               </Button>
-              <Button variant="ghost" className="w-full" onClick={handleSubmit} disabled={isSaving}>
+              <Button
+                variant="ghost"
+                className="w-full"
+                onClick={handleSubmit}
+                disabled={isSaving}
+              >
                 {isSaving ? "Đang lưu..." : "Lưu hồ sơ"}
               </Button>
             </div>
 
-            {scanMessage ? <p className="mt-4 text-sm font-semibold text-emerald-700">{scanMessage}</p> : null}
-            {scanError ? <p className="mt-2 text-sm font-semibold text-rose-600">{scanError}</p> : null}
-            {submitError ? <p className="mt-2 text-sm font-semibold text-rose-600">{submitError}</p> : null}
+            {scanMessage ? (
+              <p className="mt-4 text-sm font-semibold text-emerald-700">
+                {scanMessage}
+              </p>
+            ) : null}
+            {scanError ? (
+              <p className="mt-2 text-sm font-semibold text-rose-600">
+                {scanError}
+              </p>
+            ) : null}
+            {submitError ? (
+              <p className="mt-2 text-sm font-semibold text-rose-600">
+                {submitError}
+              </p>
+            ) : null}
           </div>
 
           <div className="soft-panel">
-            <p className="text-sm font-black uppercase tracking-[0.18em] text-secondary">Bước 2</p>
-            <h3 className="mt-3 text-xl font-black text-on-surface">Kết quả scan</h3>
+            <p className="text-sm font-black uppercase tracking-[0.18em] text-secondary">
+              Bước 2
+            </p>
+            <h3 className="mt-3 text-xl font-black text-on-surface">
+              Kết quả scan
+            </h3>
             <p className="mt-2 text-sm font-medium text-on-surface-variant">
               {hasScannedData
                 ? "Hệ thống đã điền sẵn một phần thông tin. Bạn có thể kiểm tra và chỉnh lại trước khi lưu."
@@ -389,55 +468,94 @@ export function UploadCandidateForm({
           <div className="grid gap-5 md:grid-cols-2">
             <div>
               <label className="label">Họ và tên</label>
-              <Input value={form.fullName} onChange={(e) => updateField("fullName", e.target.value)} />
+              <Input
+                value={form.fullName}
+                onChange={(e) => updateField("fullName", e.target.value)}
+              />
             </div>
             <div>
               <label className="label">Email</label>
-              <Input value={form.email} onChange={(e) => updateField("email", e.target.value)} />
+              <Input
+                value={form.email}
+                onChange={(e) => updateField("email", e.target.value)}
+              />
             </div>
             <div>
               <label className="label">Số điện thoại</label>
-              <Input value={form.phone} onChange={(e) => updateField("phone", e.target.value)} />
+              <Input
+                value={form.phone}
+                onChange={(e) => updateField("phone", e.target.value)}
+              />
             </div>
             <div>
               <label className="label">Ngày sinh / Năm sinh</label>
-              <Input value={form.dateOfBirth} onChange={(e) => updateField("dateOfBirth", e.target.value)} />
+              <Input
+                value={form.dateOfBirth}
+                onChange={(e) => updateField("dateOfBirth", e.target.value)}
+              />
             </div>
             <div>
               <label className="label">Trường học</label>
-              <Input value={form.school} onChange={(e) => updateField("school", e.target.value)} />
+              <Input
+                value={form.school}
+                onChange={(e) => updateField("school", e.target.value)}
+              />
             </div>
             <div>
               <label className="label">Năm tốt nghiệp</label>
-              <Input value={form.graduationYear} onChange={(e) => updateField("graduationYear", e.target.value)} />
+              <Input
+                value={form.graduationYear}
+                onChange={(e) => updateField("graduationYear", e.target.value)}
+              />
             </div>
             <div>
               <label className="label">Số năm kinh nghiệm</label>
-              <Input value={form.yearsOfExperience} onChange={(e) => updateField("yearsOfExperience", e.target.value)} />
+              <Input
+                value={form.yearsOfExperience}
+                onChange={(e) =>
+                  updateField("yearsOfExperience", e.target.value)
+                }
+              />
             </div>
             <div>
               <label className="label">Quê quán</label>
-              <Input value={form.hometown} onChange={(e) => updateField("hometown", e.target.value)} />
+              <Input
+                value={form.hometown}
+                onChange={(e) => updateField("hometown", e.target.value)}
+              />
             </div>
           </div>
 
           <div className="mt-5">
             <label className="label">Địa chỉ</label>
-            <Input value={form.address} onChange={(e) => updateField("address", e.target.value)} />
+            <Input
+              value={form.address}
+              onChange={(e) => updateField("address", e.target.value)}
+            />
           </div>
 
           <div className="mt-5 grid gap-5 md:grid-cols-2">
             <div>
               <label className="label">Vị trí ứng tuyển</label>
-              <Input value={form.position} onChange={(e) => updateField("position", e.target.value)} />
+              <Input
+                value={form.position}
+                onChange={(e) => updateField("position", e.target.value)}
+              />
             </div>
             <div>
               <label className="label">Nguồn</label>
-              <Input value={form.source} onChange={(e) => updateField("source", e.target.value)} />
+              <Input
+                value={form.source}
+                onChange={(e) => updateField("source", e.target.value)}
+              />
             </div>
             <div>
               <label className="label">Dự án tuyển dụng</label>
-              <select className="field" value={form.projectId} onChange={(e) => updateField("projectId", e.target.value)}>
+              <select
+                className="field"
+                value={form.projectId}
+                onChange={(e) => updateField("projectId", e.target.value)}
+              >
                 <option value="">Chưa gắn dự án</option>
                 {projects.map((project) => (
                   <option key={project.id} value={project.id}>
@@ -463,7 +581,17 @@ export function UploadCandidateForm({
             </div>
             <div>
               <label className="label">Mức offer dự kiến</label>
-              <Input value={form.offerSalary} onChange={(e) => updateField("offerSalary", e.target.value)} />
+              <Input
+                value={form.offerSalary}
+                onChange={(e) => updateField("offerSalary", e.target.value)}
+              />
+            </div>
+            <div>
+              <label className="label">Mức lương mong muốn</label>
+              <Input
+                value={form.expectedSalary}
+                onChange={(e) => updateField("expectedSalary", e.target.value)}
+              />
             </div>
           </div>
 
@@ -478,12 +606,20 @@ export function UploadCandidateForm({
 
           <div className="mt-5">
             <label className="label">Tóm tắt ứng viên</label>
-            <Textarea rows={4} value={form.summary} onChange={(e) => updateField("summary", e.target.value)} />
+            <Textarea
+              rows={4}
+              value={form.summary}
+              onChange={(e) => updateField("summary", e.target.value)}
+            />
           </div>
 
           <div className="mt-5">
             <label className="label">Ghi chú nội bộ / gợi ý scan</label>
-            <Textarea rows={4} value={form.notes} onChange={(e) => updateField("notes", e.target.value)} />
+            <Textarea
+              rows={4}
+              value={form.notes}
+              onChange={(e) => updateField("notes", e.target.value)}
+            />
           </div>
         </div>
       </div>
@@ -496,11 +632,16 @@ export function UploadCandidateForm({
                 <KeyRound className="size-5" />
               </div>
               <div>
-                <p className="text-sm font-black uppercase tracking-[0.18em] text-primary">Gemini Config</p>
-                <h3 className="mt-2 text-2xl font-black text-on-surface">Cấu hình AI Scan</h3>
+                <p className="text-sm font-black uppercase tracking-[0.18em] text-primary">
+                  Gemini Config
+                </p>
+                <h3 className="mt-2 text-2xl font-black text-on-surface">
+                  Cấu hình AI Scan
+                </h3>
                 <p className="mt-2 text-sm font-medium leading-7 text-on-surface-variant">
-                  Danh sách model được tải động từ Gemini API theo API key hiện tại. Khi Google thêm model mới, popup
-                  này sẽ tự lấy được mà không cần hardcode lại.
+                  Danh sách model được tải động từ Gemini API theo API key hiện
+                  tại. Khi Google thêm model mới, popup này sẽ tự lấy được mà
+                  không cần hardcode lại.
                 </p>
               </div>
             </div>
@@ -520,10 +661,14 @@ export function UploadCandidateForm({
                 <label className="label mb-0">Gemini Model</label>
                 <button
                   type="button"
-                  onClick={() => loadGeminiModels(geminiApiKeyDraft, geminiModelDraft)}
+                  onClick={() =>
+                    loadGeminiModels(geminiApiKeyDraft, geminiModelDraft)
+                  }
                   className="inline-flex items-center gap-2 text-sm font-bold text-primary transition hover:opacity-80"
                 >
-                  <RefreshCcw className={cn("size-4", isLoadingModels && "animate-spin")} />
+                  <RefreshCcw
+                    className={cn("size-4", isLoadingModels && "animate-spin")}
+                  />
                   Tải model
                 </button>
               </div>
@@ -535,7 +680,11 @@ export function UploadCandidateForm({
                 disabled={isLoadingModels || !geminiModels.length}
               >
                 <option value="">
-                  {isLoadingModels ? "Đang tải model..." : geminiModels.length ? "Chọn model Gemini" : "Chưa có model"}
+                  {isLoadingModels
+                    ? "Đang tải model..."
+                    : geminiModels.length
+                      ? "Chọn model Gemini"
+                      : "Chưa có model"}
                 </option>
                 {geminiModels.map((model) => (
                   <option key={model.id} value={model.id}>
@@ -546,18 +695,33 @@ export function UploadCandidateForm({
 
               {selectedGeminiModel ? (
                 <div className="mt-3 rounded-[1.4rem] bg-surface-container-low p-4">
-                  <p className="text-sm font-black text-on-surface">{selectedGeminiModel.displayName}</p>
+                  <p className="text-sm font-black text-on-surface">
+                    {selectedGeminiModel.displayName}
+                  </p>
                   <p className="mt-2 text-sm leading-6 text-on-surface-variant">
-                    {selectedGeminiModel.description || "Model hỗ trợ generateContent cho AI Scan CV."}
+                    {selectedGeminiModel.description ||
+                      "Model hỗ trợ generateContent cho AI Scan CV."}
                   </p>
                   <div className="mt-3 flex flex-wrap gap-3 text-xs font-bold text-on-surface-variant">
-                    <span>Input: {formatTokenLimit(selectedGeminiModel.inputTokenLimit)} tokens</span>
-                    <span>Output: {formatTokenLimit(selectedGeminiModel.outputTokenLimit)} tokens</span>
+                    <span>
+                      Input:{" "}
+                      {formatTokenLimit(selectedGeminiModel.inputTokenLimit)}{" "}
+                      tokens
+                    </span>
+                    <span>
+                      Output:{" "}
+                      {formatTokenLimit(selectedGeminiModel.outputTokenLimit)}{" "}
+                      tokens
+                    </span>
                   </div>
                 </div>
               ) : null}
 
-              {modelsError ? <p className="mt-3 text-sm font-semibold text-rose-600">{modelsError}</p> : null}
+              {modelsError ? (
+                <p className="mt-3 text-sm font-semibold text-rose-600">
+                  {modelsError}
+                </p>
+              ) : null}
             </div>
 
             <div className="mt-6 flex flex-wrap gap-3">

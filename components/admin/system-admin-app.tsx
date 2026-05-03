@@ -56,17 +56,26 @@ function buildDataProvider(): DataProvider {
       url.searchParams.set("order", sortOrder);
       url.searchParams.set("filter", JSON.stringify(params.filter ?? {}));
 
-      const json = (await requestJson(url.toString())) as { data: Record<string, unknown>[]; total: number };
+      const json = (await requestJson(url.toString())) as {
+        data: Record<string, unknown>[];
+        total: number;
+      };
       return { data: json.data as never[], total: json.total };
     },
 
     async getOne(resource, params) {
-      const json = (await requestJson(`${base}/${resource}/${params.id}`)) as { data: Record<string, unknown> };
+      const json = (await requestJson(`${base}/${resource}/${params.id}`)) as {
+        data: Record<string, unknown>;
+      };
       return { data: json.data as never };
     },
 
     async getMany(resource, params) {
-      const records = await Promise.all(params.ids.map((id) => this.getOne(resource, { id, meta: params.meta })));
+      const records = await Promise.all(
+        params.ids.map((id) =>
+          this.getOne(resource, { id, meta: params.meta }),
+        ),
+      );
       return { data: records.map((record) => record.data) as never[] };
     },
 
@@ -97,9 +106,19 @@ function buildDataProvider(): DataProvider {
 
     async updateMany(resource, params) {
       const results = await Promise.all(
-        params.ids.map((id) => this.update(resource, { id, data: params.data, previousData: params.data })),
+        params.ids.map((id) =>
+          this.update(resource, {
+            id,
+            data: params.data,
+            previousData: params.data,
+          }),
+        ),
       );
-      return { data: results.map((result) => (result.data as { id: string | number }).id) };
+      return {
+        data: results.map(
+          (result) => (result.data as { id: string | number }).id,
+        ),
+      };
     },
 
     async delete(resource, params) {
@@ -110,7 +129,11 @@ function buildDataProvider(): DataProvider {
     },
 
     async deleteMany(resource, params) {
-      await Promise.all(params.ids.map((id) => this.delete(resource, { id, previousData: {} as never })));
+      await Promise.all(
+        params.ids.map((id) =>
+          this.delete(resource, { id, previousData: {} as never }),
+        ),
+      );
       return { data: params.ids };
     },
   };
@@ -165,7 +188,12 @@ function UsersEdit() {
         <TextInput source="name" fullWidth />
         <TextInput source="email" fullWidth />
         <SelectInput source="role" choices={roleChoices} />
-        <TextInput source="password" type="password" fullWidth helperText="Để trống nếu không đổi mật khẩu." />
+        <TextInput
+          source="password"
+          type="password"
+          fullWidth
+          helperText="Để trống nếu không đổi mật khẩu."
+        />
       </SimpleForm>
     </Edit>
   );
@@ -218,6 +246,7 @@ function CandidatesList() {
         <TextField source="fullName" />
         <EmailField source="email" />
         <TextField source="position" />
+        <TextField source="expectedSalary" />
         <TextField source="status" />
         <TextField source="workspaceName" />
         <TextField source="hrName" />
@@ -239,9 +268,13 @@ function CandidatesEdit() {
         <TextInput source="phone" fullWidth />
         <TextInput source="position" fullWidth />
         <TextInput source="source" fullWidth />
+        <TextInput source="expectedSalary" fullWidth />
         <TextInput source="offerSalary" fullWidth />
         <SelectInput source="status" choices={candidateStatusChoices} />
-        <SelectInput source="managerDecision" choices={managerDecisionChoices} />
+        <SelectInput
+          source="managerDecision"
+          choices={managerDecisionChoices}
+        />
         <TextInput source="managerOfferSalary" fullWidth />
         <TextInput source="managerReviewNote" fullWidth multiline minRows={4} />
         <TextInput source="notes" fullWidth multiline minRows={4} />
@@ -258,7 +291,9 @@ function ProjectsList() {
         <TextField source="workspaceName" />
         <FunctionField
           label="Mô tả"
-          render={(record: { description?: string | null }) => record.description || "-"}
+          render={(record: { description?: string | null }) =>
+            record.description || "-"
+          }
         />
         <DateField source="updatedAt" showTime />
         <EditButton />
@@ -285,10 +320,17 @@ function FilesList() {
       <Datagrid bulkActionButtons={false}>
         <TextField source="fileName" />
         <TextField source="workspaceName" />
-        <FunctionField label="Người upload" render={(record: { uploaderName?: string }) => record.uploaderName || "-"} />
+        <FunctionField
+          label="Người upload"
+          render={(record: { uploaderName?: string }) =>
+            record.uploaderName || "-"
+          }
+        />
         <FunctionField
           label="Kích thước"
-          render={(record: { fileSize?: number }) => `${((record.fileSize || 0) / 1024).toFixed(0)} KB`}
+          render={(record: { fileSize?: number }) =>
+            `${((record.fileSize || 0) / 1024).toFixed(0)} KB`
+          }
         />
         <UrlField source="filePath" />
         <DateField source="uploadedAt" showTime />
@@ -305,7 +347,9 @@ function LogsList() {
         <TextField source="fileName" label="File log" />
         <FunctionField
           label="Dung lượng"
-          render={(record: { sizeBytes?: number }) => `${((record.sizeBytes || 0) / 1024).toFixed(1)} KB`}
+          render={(record: { sizeBytes?: number }) =>
+            `${((record.sizeBytes || 0) / 1024).toFixed(1)} KB`
+          }
         />
         <DateField source="updatedAt" label="Cập nhật" showTime />
         <DateField source="retainedUntil" label="Tự dọn sau" showTime />
@@ -322,7 +366,9 @@ function LogsShow() {
         <TextField source="fileName" label="File log" />
         <FunctionField
           label="Dung lượng"
-          render={(record: { sizeBytes?: number }) => `${((record.sizeBytes || 0) / 1024).toFixed(1)} KB`}
+          render={(record: { sizeBytes?: number }) =>
+            `${((record.sizeBytes || 0) / 1024).toFixed(1)} KB`
+          }
         />
         <DateField source="updatedAt" label="Cập nhật" showTime />
         <DateField source="retainedUntil" label="Tự dọn sau" showTime />
@@ -343,7 +389,8 @@ function LogsShow() {
                 lineHeight: 1.6,
               }}
             >
-              {record.tailText || `Không có nội dung trong ${record.tailBytes || 0} byte cuối.`}
+              {record.tailText ||
+                `Không có nội dung trong ${record.tailBytes || 0} byte cuối.`}
             </pre>
           )}
         />
@@ -362,12 +409,22 @@ export function SystemAdminApp() {
       title="Lệ HR Admin"
       disableTelemetry
     >
-      <Resource name="users" list={UsersList} edit={UsersEdit} create={UsersCreate} />
+      <Resource
+        name="users"
+        list={UsersList}
+        edit={UsersEdit}
+        create={UsersCreate}
+      />
       <Resource name="workspaces" list={WorkspacesList} edit={WorkspacesEdit} />
       <Resource name="candidates" list={CandidatesList} edit={CandidatesEdit} />
       <Resource name="projects" list={ProjectsList} edit={ProjectsEdit} />
       <Resource name="files" list={FilesList} />
-      <Resource name="logs" list={LogsList} show={LogsShow} options={{ label: "Logs" }} />
+      <Resource
+        name="logs"
+        list={LogsList}
+        show={LogsShow}
+        options={{ label: "Logs" }}
+      />
     </Admin>
   );
 }

@@ -21,7 +21,10 @@ function requiresInterviewDetails(status: string) {
   return status === "INTERVIEW" || status === "INTERVIEWED";
 }
 
-async function ensureProjectInWorkspace(projectId: string | null, workspaceId: string) {
+async function ensureProjectInWorkspace(
+  projectId: string | null,
+  workspaceId: string,
+) {
   if (!projectId) return null;
 
   const project = await prisma.project.findFirst({
@@ -69,13 +72,23 @@ export async function GET(request: Request) {
   const workspaceId = searchParams.get("workspaceId");
 
   if (!workspaceId) {
-    return NextResponse.json({ error: "`workspaceId` là bắt buộc." }, { status: 400 });
+    return NextResponse.json(
+      { error: "`workspaceId` là bắt buộc." },
+      { status: 400 },
+    );
   }
 
   try {
-    await requireWorkspaceAccess(workspaceId, session.user.id, session.user.role);
+    await requireWorkspaceAccess(
+      workspaceId,
+      session.user.id,
+      session.user.role,
+    );
   } catch {
-    return NextResponse.json({ error: "Bạn không có quyền truy cập workspace này." }, { status: 403 });
+    return NextResponse.json(
+      { error: "Bạn không có quyền truy cập workspace này." },
+      { status: 403 },
+    );
   }
 
   const search = searchParams.get("search")?.trim();
@@ -127,14 +140,24 @@ export async function POST(request: Request) {
   const workspaceId = String(formData.get("workspaceId") ?? "");
 
   if (!workspaceId) {
-    return NextResponse.json({ error: "`workspaceId` là bắt buộc." }, { status: 400 });
+    return NextResponse.json(
+      { error: "`workspaceId` là bắt buộc." },
+      { status: 400 },
+    );
   }
 
   let membership;
   try {
-    membership = await requireWorkspaceHrActor(workspaceId, session.user.id, session.user.role);
+    membership = await requireWorkspaceHrActor(
+      workspaceId,
+      session.user.id,
+      session.user.role,
+    );
   } catch {
-    return NextResponse.json({ error: "Bạn không có quyền tạo hồ sơ trong workspace này." }, { status: 403 });
+    return NextResponse.json(
+      { error: "Bạn không có quyền tạo hồ sơ trong workspace này." },
+      { status: 403 },
+    );
   }
 
   const file = formData.get("file");
@@ -142,7 +165,10 @@ export async function POST(request: Request) {
 
   if (file instanceof File) {
     if (file.size > 10 * 1024 * 1024) {
-      return NextResponse.json({ error: "File vượt quá giới hạn 10MB." }, { status: 400 });
+      return NextResponse.json(
+        { error: "File vượt quá giới hạn 10MB." },
+        { status: 400 },
+      );
     }
 
     const buffer = Buffer.from(await file.arrayBuffer());
@@ -170,35 +196,61 @@ export async function POST(request: Request) {
     .filter(Boolean);
 
   const status = String(formData.get("status") ?? "NEW");
-  const requestedHrId = String(formData.get("hrId") ?? session.user.id).trim() || session.user.id;
+  const requestedHrId =
+    String(formData.get("hrId") ?? session.user.id).trim() || session.user.id;
   const interviewDate = String(formData.get("interviewDate") ?? "").trim();
   const interviewerName = String(formData.get("interviewerName") ?? "").trim();
   const projectIdRaw = String(formData.get("projectId") ?? "").trim();
 
-  if (!canAssignCandidateToHr(requestedHrId, session.user.id, membership.membershipRole, session.user.role)) {
-    return NextResponse.json({ error: "HR chỉ được tạo và nhận CV của chính mình." }, { status: 403 });
+  if (
+    !canAssignCandidateToHr(
+      requestedHrId,
+      session.user.id,
+      membership.membershipRole,
+      session.user.role,
+    )
+  ) {
+    return NextResponse.json(
+      { error: "HR chỉ được tạo và nhận CV của chính mình." },
+      { status: 403 },
+    );
   }
 
   let hrId: string;
   try {
     hrId = await ensureAssignableHr(workspaceId, requestedHrId);
   } catch {
-    return NextResponse.json({ error: "Người phụ trách phải là HR hoặc HR Admin trong workspace." }, { status: 400 });
+    return NextResponse.json(
+      { error: "Người phụ trách phải là HR hoặc HR Admin trong workspace." },
+      { status: 400 },
+    );
   }
 
-  if (requiresInterviewDetails(status) && (!interviewDate || !interviewerName)) {
+  if (
+    requiresInterviewDetails(status) &&
+    (!interviewDate || !interviewerName)
+  ) {
     return NextResponse.json(
-      { error: "Khi tạo ứng viên ở trạng thái phỏng vấn, cần nhập ngày phỏng vấn và người phỏng vấn." },
+      {
+        error:
+          "Khi tạo ứng viên ở trạng thái phỏng vấn, cần nhập ngày phỏng vấn và người phỏng vấn.",
+      },
       { status: 400 },
     );
   }
 
   let projectId: string | null = null;
   try {
-    projectId = await ensureProjectInWorkspace(projectIdRaw || null, workspaceId);
+    projectId = await ensureProjectInWorkspace(
+      projectIdRaw || null,
+      workspaceId,
+    );
   } catch (error) {
     if (error instanceof Error && error.message === "PROJECT_NOT_FOUND") {
-      return NextResponse.json({ error: "Dự án đã chọn không thuộc workspace này." }, { status: 400 });
+      return NextResponse.json(
+        { error: "Dự án đã chọn không thuộc workspace này." },
+        { status: 400 },
+      );
     }
     throw error;
   }
@@ -222,11 +274,13 @@ export async function POST(request: Request) {
       summary: String(formData.get("summary") ?? "") || null,
       position: String(formData.get("position") ?? "") || null,
       source: String(formData.get("source") ?? "") || null,
+      expectedSalary: String(formData.get("expectedSalary") ?? "") || null,
       offerSalary: String(formData.get("offerSalary") ?? "") || null,
       notes: String(formData.get("notes") ?? "") || null,
       interviewDate: interviewDate || null,
       interviewerName: interviewerName || null,
-      interviewFeedback: String(formData.get("interviewFeedback") ?? "") || null,
+      interviewFeedback:
+        String(formData.get("interviewFeedback") ?? "") || null,
       managerDecision: "PENDING",
       status,
       statusHistory: {

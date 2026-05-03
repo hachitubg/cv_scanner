@@ -47,6 +47,7 @@ type CandidateDetailFormProps = {
     summary: string | null;
     position: string | null;
     source: string | null;
+    expectedSalary: string | null;
     offerSalary: string | null;
     notes: string | null;
     interviewDate: string | null;
@@ -107,6 +108,7 @@ export function CandidateDetailForm({
     summary: candidate.summary ?? "",
     position: candidate.position ?? "",
     source: candidate.source ?? "",
+    expectedSalary: candidate.expectedSalary ?? "",
     offerSalary: candidate.offerSalary ?? "",
     notes: candidate.notes ?? "",
     interviewDate: toDateTimeLocalValue(candidate.interviewDate),
@@ -116,7 +118,8 @@ export function CandidateDetailForm({
     projectId: candidate.projectId ?? "",
     status: candidate.status,
     statusNote: "",
-    managerDecision: (candidate.managerDecision as ManagerDecisionType) || "PENDING",
+    managerDecision:
+      (candidate.managerDecision as ManagerDecisionType) || "PENDING",
     managerOfferSalary: candidate.managerOfferSalary ?? "",
     managerReviewNote: candidate.managerReviewNote ?? "",
     managerFinalStatus: "",
@@ -125,12 +128,18 @@ export function CandidateDetailForm({
   const [isPending, startTransition] = useTransition();
 
   const statusLabel = useMemo(
-    () => candidateStatusMeta[(form.status as keyof typeof candidateStatusMeta) || "NEW"],
+    () =>
+      candidateStatusMeta[
+        (form.status as keyof typeof candidateStatusMeta) || "NEW"
+      ],
     [form.status],
   );
 
   const reviewMeta = useMemo(
-    () => managerDecisionMeta[(form.managerDecision as ManagerDecisionType) || "PENDING"],
+    () =>
+      managerDecisionMeta[
+        (form.managerDecision as ManagerDecisionType) || "PENDING"
+      ],
     [form.managerDecision],
   );
 
@@ -143,8 +152,13 @@ export function CandidateDetailForm({
 
     if (!canEditCandidateData) return;
 
-    if (needsInterviewDetails(form.status) && (!form.interviewDate.trim() || !form.interviewerName.trim())) {
-      setError("Khi chuyển sang trạng thái phỏng vấn, cần nhập ngày phỏng vấn và người phỏng vấn.");
+    if (
+      needsInterviewDetails(form.status) &&
+      (!form.interviewDate.trim() || !form.interviewerName.trim())
+    ) {
+      setError(
+        "Khi chuyển sang trạng thái phỏng vấn, cần nhập ngày phỏng vấn và người phỏng vấn.",
+      );
       return;
     }
 
@@ -164,6 +178,7 @@ export function CandidateDetailForm({
           summary: form.summary,
           position: form.position,
           source: form.source,
+          expectedSalary: form.expectedSalary,
           offerSalary: form.offerSalary,
           notes: form.notes,
           interviewFeedback: form.interviewFeedback,
@@ -171,13 +186,17 @@ export function CandidateDetailForm({
           projectId: form.projectId || null,
           status: form.status,
           statusNote: form.statusNote,
-          interviewDate: form.interviewDate ? new Date(form.interviewDate).toISOString() : "",
+          interviewDate: form.interviewDate
+            ? new Date(form.interviewDate).toISOString()
+            : "",
           interviewerName: form.interviewerName.trim(),
           skills: form.skills
             .split(",")
             .map((item) => item.trim())
             .filter(Boolean),
-          yearsOfExperience: form.yearsOfExperience ? Number(form.yearsOfExperience) : null,
+          yearsOfExperience: form.yearsOfExperience
+            ? Number(form.yearsOfExperience)
+            : null,
         }),
       });
 
@@ -205,7 +224,9 @@ export function CandidateDetailForm({
           managerOfferSalary: form.managerOfferSalary,
           managerReviewNote: form.managerReviewNote,
           status: form.managerFinalStatus || undefined,
-          statusNote: form.managerFinalStatus ? "Quản lý chốt trên màn hình chi tiết" : undefined,
+          statusNote: form.managerFinalStatus
+            ? "Quản lý chốt trên màn hình chi tiết"
+            : undefined,
         }),
       });
 
@@ -248,29 +269,57 @@ export function CandidateDetailForm({
           <div className="bubbly-card p-6">
             <div className="flex flex-wrap items-center justify-between gap-4">
               <div>
-                <p className="text-sm font-black uppercase tracking-[0.18em] text-primary">Thông tin ứng viên</p>
-                <h2 className="mt-2 text-3xl font-black text-on-surface">{form.fullName || "Chưa đặt tên"}</h2>
+                <p className="text-sm font-black uppercase tracking-[0.18em] text-primary">
+                  Thông tin ứng viên
+                </p>
+                <h2 className="mt-2 text-3xl font-black text-on-surface">
+                  {form.fullName || "Chưa đặt tên"}
+                </h2>
                 <p className="mt-2 text-sm font-medium text-on-surface-variant">
                   {form.position || "Chưa có vị trí ứng tuyển"}
                 </p>
               </div>
               <div className="flex flex-wrap gap-2">
-                <Badge className={statusLabel.className}>{statusLabel.label}</Badge>
-                <Badge className={reviewMeta.className}>{reviewMeta.label}</Badge>
+                <Badge className={statusLabel.className}>
+                  {statusLabel.label}
+                </Badge>
+                <Badge className={reviewMeta.className}>
+                  {reviewMeta.label}
+                </Badge>
               </div>
             </div>
 
             <div className="mt-6 grid gap-5 md:grid-cols-2">
-              <FormInput label="Email" value={form.email} onChange={(value) => updateField("email", value)} disabled={fieldsDisabled} />
-              <FormInput label="Số điện thoại" value={form.phone} onChange={(value) => updateField("phone", value)} disabled={fieldsDisabled} />
-              <FormInput label="Ngày sinh / Năm sinh" value={form.dateOfBirth} onChange={(value) => updateField("dateOfBirth", value)} disabled={fieldsDisabled} />
+              <FormInput
+                label="Email"
+                value={form.email}
+                onChange={(value) => updateField("email", value)}
+                disabled={fieldsDisabled}
+              />
+              <FormInput
+                label="Số điện thoại"
+                value={form.phone}
+                onChange={(value) => updateField("phone", value)}
+                disabled={fieldsDisabled}
+              />
+              <FormInput
+                label="Ngày sinh / Năm sinh"
+                value={form.dateOfBirth}
+                onChange={(value) => updateField("dateOfBirth", value)}
+                disabled={fieldsDisabled}
+              />
               <FormInput
                 label="Số năm kinh nghiệm"
                 value={form.yearsOfExperience}
                 onChange={(value) => updateField("yearsOfExperience", value)}
                 disabled={fieldsDisabled}
               />
-              <FormInput label="Trường học" value={form.school} onChange={(value) => updateField("school", value)} disabled={fieldsDisabled} />
+              <FormInput
+                label="Trường học"
+                value={form.school}
+                onChange={(value) => updateField("school", value)}
+                disabled={fieldsDisabled}
+              />
               <FormInput
                 label="Năm tốt nghiệp"
                 value={form.graduationYear}
@@ -281,17 +330,41 @@ export function CandidateDetailForm({
 
             <div className="mt-5">
               <label className="label">Địa chỉ</label>
-              <Input value={form.address} onChange={(e) => updateField("address", e.target.value)} disabled={fieldsDisabled} />
+              <Input
+                value={form.address}
+                onChange={(e) => updateField("address", e.target.value)}
+                disabled={fieldsDisabled}
+              />
             </div>
 
             <div className="mt-5">
               <label className="label">Quê quán</label>
-              <Input value={form.hometown} onChange={(e) => updateField("hometown", e.target.value)} disabled={fieldsDisabled} />
+              <Input
+                value={form.hometown}
+                onChange={(e) => updateField("hometown", e.target.value)}
+                disabled={fieldsDisabled}
+              />
             </div>
 
             <div className="mt-5 grid gap-5 md:grid-cols-2">
-              <FormInput label="Vị trí ứng tuyển" value={form.position} onChange={(value) => updateField("position", value)} disabled={fieldsDisabled} />
-              <FormInput label="Nguồn" value={form.source} onChange={(value) => updateField("source", value)} disabled={fieldsDisabled} />
+              <FormInput
+                label="Vị trí ứng tuyển"
+                value={form.position}
+                onChange={(value) => updateField("position", value)}
+                disabled={fieldsDisabled}
+              />
+              <FormInput
+                label="Nguồn"
+                value={form.source}
+                onChange={(value) => updateField("source", value)}
+                disabled={fieldsDisabled}
+              />
+              <FormInput
+                label="Mức lương mong muốn"
+                value={form.expectedSalary}
+                onChange={(value) => updateField("expectedSalary", value)}
+                disabled={fieldsDisabled}
+              />
               <FormInput
                 label="Mức offer nội bộ"
                 value={form.offerSalary}
@@ -316,7 +389,12 @@ export function CandidateDetailForm({
               </div>
               <div>
                 <label className="label">HR phụ trách</label>
-                <select className="field" value={form.hrId} onChange={(e) => updateField("hrId", e.target.value)} disabled={fieldsDisabled}>
+                <select
+                  className="field"
+                  value={form.hrId}
+                  onChange={(e) => updateField("hrId", e.target.value)}
+                  disabled={fieldsDisabled}
+                >
                   {members.map((member) => (
                     <option key={member.id} value={member.id}>
                       {member.name}
@@ -328,20 +406,38 @@ export function CandidateDetailForm({
 
             <div className="mt-5">
               <label className="label">Kỹ năng chính</label>
-              <Input value={form.skills} onChange={(e) => updateField("skills", e.target.value)} disabled={fieldsDisabled} />
+              <Input
+                value={form.skills}
+                onChange={(e) => updateField("skills", e.target.value)}
+                disabled={fieldsDisabled}
+              />
             </div>
 
             <div className="mt-5">
               <label className="label">Tóm tắt ứng viên</label>
-              <Textarea rows={4} value={form.summary} onChange={(e) => updateField("summary", e.target.value)} disabled={fieldsDisabled} />
+              <Textarea
+                rows={4}
+                value={form.summary}
+                onChange={(e) => updateField("summary", e.target.value)}
+                disabled={fieldsDisabled}
+              />
             </div>
 
             <div className="mt-5">
               <label className="label">Ghi chú nội bộ</label>
-              <Textarea rows={4} value={form.notes} onChange={(e) => updateField("notes", e.target.value)} disabled={fieldsDisabled} />
+              <Textarea
+                rows={4}
+                value={form.notes}
+                onChange={(e) => updateField("notes", e.target.value)}
+                disabled={fieldsDisabled}
+              />
             </div>
 
-            {error ? <p className="mt-4 text-sm font-semibold text-rose-600">{error}</p> : null}
+            {error ? (
+              <p className="mt-4 text-sm font-semibold text-rose-600">
+                {error}
+              </p>
+            ) : null}
 
             <div className="mt-6 flex flex-wrap gap-3">
               {canEditCandidateData ? (
@@ -370,10 +466,16 @@ export function CandidateDetailForm({
         <div className="space-y-6">
           {canEditCandidateData ? (
             <div className="bubbly-card p-6">
-              <p className="text-sm font-black uppercase tracking-[0.18em] text-secondary">Pipeline</p>
+              <p className="text-sm font-black uppercase tracking-[0.18em] text-secondary">
+                Pipeline
+              </p>
               <div className="mt-4">
                 <label className="label">Trạng thái hiện tại</label>
-                <select className="field" value={form.status} onChange={(e) => updateField("status", e.target.value)}>
+                <select
+                  className="field"
+                  value={form.status}
+                  onChange={(e) => updateField("status", e.target.value)}
+                >
                   {CANDIDATE_STATUSES.map((status) => (
                     <option key={status} value={status}>
                       {candidateStatusMeta[status].label}
@@ -388,14 +490,18 @@ export function CandidateDetailForm({
                   <Input
                     type="datetime-local"
                     value={form.interviewDate}
-                    onChange={(e) => updateField("interviewDate", e.target.value)}
+                    onChange={(e) =>
+                      updateField("interviewDate", e.target.value)
+                    }
                   />
                 </div>
                 <div>
                   <label className="label">Người phỏng vấn</label>
                   <Input
                     value={form.interviewerName}
-                    onChange={(e) => updateField("interviewerName", e.target.value)}
+                    onChange={(e) =>
+                      updateField("interviewerName", e.target.value)
+                    }
                     placeholder="Ví dụ: Anh Minh, Chị Thảo"
                   />
                 </div>
@@ -403,7 +509,8 @@ export function CandidateDetailForm({
 
               {needsInterviewDetails(form.status) ? (
                 <p className="mt-3 text-sm font-semibold text-primary">
-                  Trạng thái này yêu cầu nhập đủ ngày phỏng vấn và người phỏng vấn.
+                  Trạng thái này yêu cầu nhập đủ ngày phỏng vấn và người phỏng
+                  vấn.
                 </p>
               ) : null}
 
@@ -412,7 +519,9 @@ export function CandidateDetailForm({
                 <Textarea
                   rows={4}
                   value={form.interviewFeedback}
-                  onChange={(e) => updateField("interviewFeedback", e.target.value)}
+                  onChange={(e) =>
+                    updateField("interviewFeedback", e.target.value)
+                  }
                 />
               </div>
 
@@ -429,12 +538,20 @@ export function CandidateDetailForm({
           ) : null}
 
           <div className="bubbly-card p-6">
-            <p className="text-sm font-black uppercase tracking-[0.18em] text-primary">Đánh giá của quản lý</p>
+            <p className="text-sm font-black uppercase tracking-[0.18em] text-primary">
+              Đánh giá của quản lý
+            </p>
             {canReviewCandidate ? (
               <>
                 <div className="mt-4">
                   <label className="label">Quyết định duyệt</label>
-                  <select className="field" value={form.managerDecision} onChange={(e) => updateField("managerDecision", e.target.value)}>
+                  <select
+                    className="field"
+                    value={form.managerDecision}
+                    onChange={(e) =>
+                      updateField("managerDecision", e.target.value)
+                    }
+                  >
                     {MANAGER_DECISIONS.map((decision) => (
                       <option key={decision} value={decision}>
                         {managerDecisionMeta[decision].label}
@@ -447,7 +564,9 @@ export function CandidateDetailForm({
                   <label className="label">Offer manager đề xuất</label>
                   <Input
                     value={form.managerOfferSalary}
-                    onChange={(e) => updateField("managerOfferSalary", e.target.value)}
+                    onChange={(e) =>
+                      updateField("managerOfferSalary", e.target.value)
+                    }
                     placeholder="Ví dụ: 25.000.000 VND"
                   />
                 </div>
@@ -457,7 +576,9 @@ export function CandidateDetailForm({
                   <Textarea
                     rows={4}
                     value={form.managerReviewNote}
-                    onChange={(e) => updateField("managerReviewNote", e.target.value)}
+                    onChange={(e) =>
+                      updateField("managerReviewNote", e.target.value)
+                    }
                     placeholder="Ví dụ: phù hợp dự án ABC, có thể đi tiếp offer"
                   />
                 </div>
@@ -467,7 +588,9 @@ export function CandidateDetailForm({
                   <select
                     className="field"
                     value={form.managerFinalStatus}
-                    onChange={(e) => updateField("managerFinalStatus", e.target.value)}
+                    onChange={(e) =>
+                      updateField("managerFinalStatus", e.target.value)
+                    }
                   >
                     <option value="">Không đổi trạng thái</option>
                     {MANAGER_FINAL_STATUSES.map((status) => (
@@ -488,30 +611,47 @@ export function CandidateDetailForm({
               <>
                 <div className="mt-4 grid gap-3 md:grid-cols-2">
                   <SummaryCard label="Quyết định" value={reviewMeta.label} />
-                  <SummaryCard label="Offer đề xuất" value={candidate.managerOfferSalary || "Chưa có"} />
+                  <SummaryCard
+                    label="Offer đề xuất"
+                    value={candidate.managerOfferSalary || "Chưa có"}
+                  />
                 </div>
                 <div className="mt-3 grid gap-3 md:grid-cols-2">
                   <SummaryCard
                     label="Lần duyệt gần nhất"
-                    value={candidate.managerReviewedAt ? formatDateTime(candidate.managerReviewedAt) : "Chưa có"}
+                    value={
+                      candidate.managerReviewedAt
+                        ? formatDateTime(candidate.managerReviewedAt)
+                        : "Chưa có"
+                    }
                   />
-                  <SummaryCard label="Người duyệt" value={candidate.managerReviewedBy?.name || "Chưa có"} />
+                  <SummaryCard
+                    label="Người duyệt"
+                    value={candidate.managerReviewedBy?.name || "Chưa có"}
+                  />
                 </div>
                 {candidate.managerReviewNote ? (
-                  <p className="mt-4 text-sm font-medium leading-7 text-on-surface-variant">{candidate.managerReviewNote}</p>
+                  <p className="mt-4 text-sm font-medium leading-7 text-on-surface-variant">
+                    {candidate.managerReviewNote}
+                  </p>
                 ) : null}
               </>
             )}
           </div>
 
           <div className="bubbly-card p-6">
-            <p className="text-sm font-black uppercase tracking-[0.18em] text-tertiary">Lịch sử thay đổi</p>
+            <p className="text-sm font-black uppercase tracking-[0.18em] text-tertiary">
+              Lịch sử thay đổi
+            </p>
             <div className="mt-5 rounded-[1.5rem] bg-surface-container-low p-5">
               <div className="flex flex-wrap items-start justify-between gap-4">
                 <div>
-                  <p className="text-sm font-black text-on-surface">Xem lịch sử trong popup</p>
+                  <p className="text-sm font-black text-on-surface">
+                    Xem lịch sử trong popup
+                  </p>
                   <p className="mt-2 text-sm font-medium leading-6 text-on-surface-variant">
-                    Mở popup để xem đầy đủ các lần đổi trạng thái, thời gian cập nhật và ghi chú nội bộ.
+                    Mở popup để xem đầy đủ các lần đổi trạng thái, thời gian cập
+                    nhật và ghi chú nội bộ.
                   </p>
                 </div>
                 <Button variant="ghost" onClick={() => setIsHistoryOpen(true)}>
@@ -523,22 +663,37 @@ export function CandidateDetailForm({
               {latestHistory ? (
                 <div className="mt-4 rounded-[1.35rem] border border-white/75 bg-white/80 p-4">
                   <div className="flex flex-wrap items-center gap-2">
-                    <Badge className={candidateStatusMeta[latestHistory.toStatus as keyof typeof candidateStatusMeta].className}>
-                      {candidateStatusMeta[latestHistory.toStatus as keyof typeof candidateStatusMeta].label}
+                    <Badge
+                      className={
+                        candidateStatusMeta[
+                          latestHistory.toStatus as keyof typeof candidateStatusMeta
+                        ].className
+                      }
+                    >
+                      {
+                        candidateStatusMeta[
+                          latestHistory.toStatus as keyof typeof candidateStatusMeta
+                        ].label
+                      }
                     </Badge>
                     <span className="text-xs font-bold text-on-surface-variant">
                       {candidate.statusHistory.length} lần thay đổi
                     </span>
                   </div>
                   <p className="mt-3 text-sm font-semibold text-on-surface">
-                    {latestHistory.changedByUser.name} • {formatDateTime(latestHistory.changedAt)}
+                    {latestHistory.changedByUser.name} •{" "}
+                    {formatDateTime(latestHistory.changedAt)}
                   </p>
                   {latestHistory.note ? (
-                    <p className="mt-2 text-sm font-medium leading-6 text-on-surface-variant">{latestHistory.note}</p>
+                    <p className="mt-2 text-sm font-medium leading-6 text-on-surface-variant">
+                      {latestHistory.note}
+                    </p>
                   ) : null}
                 </div>
               ) : (
-                <p className="mt-4 text-sm font-medium text-on-surface-variant">Chưa có lịch sử thay đổi.</p>
+                <p className="mt-4 text-sm font-medium text-on-surface-variant">
+                  Chưa có lịch sử thay đổi.
+                </p>
               )}
             </div>
           </div>
@@ -546,7 +701,10 @@ export function CandidateDetailForm({
       </div>
 
       {isHistoryOpen ? (
-        <HistoryModal entries={candidate.statusHistory} onClose={() => setIsHistoryOpen(false)} />
+        <HistoryModal
+          entries={candidate.statusHistory}
+          onClose={() => setIsHistoryOpen(false)}
+        />
       ) : null}
     </>
   );
@@ -566,7 +724,11 @@ function FormInput({
   return (
     <div>
       <label className="label">{label}</label>
-      <Input value={value} onChange={(event) => onChange(event.target.value)} disabled={disabled} />
+      <Input
+        value={value}
+        onChange={(event) => onChange(event.target.value)}
+        disabled={disabled}
+      />
     </div>
   );
 }
@@ -574,7 +736,9 @@ function FormInput({
 function SummaryCard({ label, value }: { label: string; value: string }) {
   return (
     <div className="rounded-[1.4rem] bg-surface-container-low p-4">
-      <p className="text-[11px] font-black uppercase tracking-[0.16em] text-outline">{label}</p>
+      <p className="text-[11px] font-black uppercase tracking-[0.16em] text-outline">
+        {label}
+      </p>
       <p className="mt-2 text-sm font-semibold text-on-surface">{value}</p>
     </div>
   );
@@ -600,26 +764,49 @@ function HistoryModal({
         </button>
 
         <div className="pr-12">
-          <p className="text-xs font-black uppercase tracking-[0.18em] text-tertiary">Lịch sử thay đổi</p>
+          <p className="text-xs font-black uppercase tracking-[0.18em] text-tertiary">
+            Lịch sử thay đổi
+          </p>
           <h3 className="mt-2 text-2xl font-black tracking-tight text-on-surface">
-            {entries.length ? `${entries.length} lần cập nhật` : "Chưa có thay đổi"}
+            {entries.length
+              ? `${entries.length} lần cập nhật`
+              : "Chưa có thay đổi"}
           </h3>
           <p className="mt-2 text-sm font-medium leading-6 text-on-surface-variant">
-            Theo dõi toàn bộ các lần đổi trạng thái, thời gian cập nhật và ghi chú nội bộ của hồ sơ này.
+            Theo dõi toàn bộ các lần đổi trạng thái, thời gian cập nhật và ghi
+            chú nội bộ của hồ sơ này.
           </p>
         </div>
 
         <div className="mt-6 space-y-4">
           {entries.length ? (
             entries.map((entry) => (
-              <div key={entry.id} className="rounded-[1.5rem] bg-surface-container-low p-4">
+              <div
+                key={entry.id}
+                className="rounded-[1.5rem] bg-surface-container-low p-4"
+              >
                 <div className="flex flex-wrap items-center gap-2">
-                  <Badge className={candidateStatusMeta[entry.toStatus as keyof typeof candidateStatusMeta].className}>
-                    {candidateStatusMeta[entry.toStatus as keyof typeof candidateStatusMeta].label}
+                  <Badge
+                    className={
+                      candidateStatusMeta[
+                        entry.toStatus as keyof typeof candidateStatusMeta
+                      ].className
+                    }
+                  >
+                    {
+                      candidateStatusMeta[
+                        entry.toStatus as keyof typeof candidateStatusMeta
+                      ].label
+                    }
                   </Badge>
                   {entry.fromStatus ? (
                     <span className="text-xs font-bold text-on-surface-variant">
-                      từ {candidateStatusMeta[entry.fromStatus as keyof typeof candidateStatusMeta].shortLabel}
+                      từ{" "}
+                      {
+                        candidateStatusMeta[
+                          entry.fromStatus as keyof typeof candidateStatusMeta
+                        ].shortLabel
+                      }
                     </span>
                   ) : null}
                 </div>
@@ -627,7 +814,9 @@ function HistoryModal({
                   {entry.changedByUser.name} • {formatDateTime(entry.changedAt)}
                 </p>
                 {entry.note ? (
-                  <p className="mt-2 text-sm font-medium leading-6 text-on-surface-variant">{entry.note}</p>
+                  <p className="mt-2 text-sm font-medium leading-6 text-on-surface-variant">
+                    {entry.note}
+                  </p>
                 ) : null}
               </div>
             ))
