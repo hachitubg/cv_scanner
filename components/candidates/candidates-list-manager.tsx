@@ -9,6 +9,8 @@ import {
   CircleUserRound,
   FolderSearch,
   LayoutGrid,
+  Search,
+  SlidersHorizontal,
   Sparkles,
   Table2,
   UserRoundSearch,
@@ -83,6 +85,21 @@ type ModalState =
   | null;
 
 type ViewMode = "table" | "cards";
+type CardSortMode =
+  | "newest"
+  | "oldest"
+  | "nameAsc"
+  | "statusAsc"
+  | "interviewSoonest";
+
+type CardFilterState = {
+  search: string;
+  status: string;
+  managerDecision: string;
+  hrName: string;
+  projectName: string;
+  sort: CardSortMode;
+};
 
 const INTERVIEW_REQUIRED_STATUSES: CandidateStatusType[] = [
   "INTERVIEW",
@@ -144,6 +161,44 @@ function getCandidateCvInfo(candidate: CandidateListItem) {
   return candidate.summary || candidate.notes || null;
 }
 
+function getTime(value: Date | string | null | undefined) {
+  if (!value) return 0;
+  const time = new Date(value).getTime();
+  return Number.isFinite(time) ? time : 0;
+}
+
+function sortCandidates(
+  candidates: CandidateListItem[],
+  sortMode: CardSortMode,
+) {
+  return [...candidates].sort((left, right) => {
+    if (sortMode === "oldest") {
+      return getTime(left.createdAt) - getTime(right.createdAt);
+    }
+
+    if (sortMode === "nameAsc") {
+      return (left.fullName || "").localeCompare(right.fullName || "", "vi");
+    }
+
+    if (sortMode === "statusAsc") {
+      return candidateStatusMeta[
+        left.status as CandidateStatusType
+      ].label.localeCompare(
+        candidateStatusMeta[right.status as CandidateStatusType].label,
+        "vi",
+      );
+    }
+
+    if (sortMode === "interviewSoonest") {
+      const leftTime = getTime(left.interviewDate) || Number.MAX_SAFE_INTEGER;
+      const rightTime = getTime(right.interviewDate) || Number.MAX_SAFE_INTEGER;
+      return leftTime - rightTime;
+    }
+
+    return getTime(right.createdAt) - getTime(left.createdAt);
+  });
+}
+
 export function CandidatesListManager({
   workspaceId,
   currentUserId,
@@ -194,7 +249,74 @@ export function CandidatesListManager({
   const [pendingId, setPendingId] = useState<string | null>(null);
   const [activeModal, setActiveModal] = useState<ModalState>(null);
   const [viewMode, setViewMode] = useState<ViewMode>("table");
+  const [cardFilters, setCardFilters] = useState<CardFilterState>({
+    search: "",
+    status: "",
+    managerDecision: "",
+    hrName: "",
+    projectName: "",
+    sort: "newest",
+  });
   const [isPending, startTransition] = useTransition();
+
+  const cardFilterOptions = useMemo(
+    () => ({
+      hrs: Array.from(new Set(items.map((candidate) => candidate.hr.name)))
+        .filter(Boolean)
+        .sort((left, right) => left.localeCompare(right, "vi")),
+      projects: Array.from(
+        new Set(
+          items
+            .map((candidate) => candidate.projectName)
+            .filter((projectName): projectName is string => Boolean(projectName)),
+        ),
+      ).sort((left, right) => left.localeCompare(right, "vi")),
+    }),
+    [items],
+  );
+
+  const cardItems = useMemo(() => {
+    const search = cardFilters.search.trim().toLowerCase();
+    const filtered = items.filter((candidate) => {
+      const matchesSearch = search
+        ? [
+            candidate.fullName,
+            candidate.email,
+            candidate.phone,
+            candidate.position,
+            candidate.source,
+            candidate.expectedSalary,
+            candidate.offerSalary,
+            candidate.summary,
+            candidate.notes,
+          ]
+            .filter(Boolean)
+            .some((value) => value!.toLowerCase().includes(search))
+        : true;
+      const matchesStatus = cardFilters.status
+        ? candidate.status === cardFilters.status
+        : true;
+      const matchesDecision = cardFilters.managerDecision
+        ? candidate.managerDecision === cardFilters.managerDecision
+        : true;
+      const matchesHr = cardFilters.hrName
+        ? candidate.hr.name === cardFilters.hrName
+        : true;
+      const matchesProject = cardFilters.projectName
+        ? candidate.projectName === cardFilters.projectName
+        : true;
+
+      return (
+        matchesSearch &&
+        matchesStatus &&
+        matchesDecision &&
+        matchesHr &&
+        matchesProject
+      );
+    });
+
+    return sortCandidates(filtered, cardFilters.sort);
+  }, [cardFilters, items]);
 
   const stats = useMemo(() => {
     const total = items.length;
@@ -226,6 +348,27 @@ export function CandidatesListManager({
 
   function changeViewMode(mode: ViewMode) {
     setViewMode(mode);
+  }
+
+  function updateCardFilter<K extends keyof CardFilterState>(
+    key: K,
+    value: CardFilterState[K],
+  ) {
+    setCardFilters((current) => ({
+      ...current,
+      [key]: value,
+    }));
+  }
+
+  function resetCardFilters() {
+    setCardFilters({
+      search: "",
+      status: "",
+      managerDecision: "",
+      hrName: "",
+      projectName: "",
+      sort: "newest",
+    });
   }
 
   function updateStatusDraft(
@@ -523,7 +666,32 @@ export function CandidatesListManager({
           />
         ) : (
           <div className="space-y-4">
-            {items.map((candidate) => {
+            <CardGridControls
+              filters={cardFilters}
+              totalCount={items.length}
+              visibleCount={cardItems.length}
+              hrOptions={cardFilterOptions.hrs}
+              projectOptions={cardFilterOptions.projects}
+              onChange={updateCardFilter}
+              onReset={resetCardFilters}
+            />
+
+            {!cardItems.length ? (
+              <div className="rounded-[1.8rem] border border-white/70 bg-white/88 p-8 text-center shadow-[0_18px_45px_rgba(160,57,100,0.08)]">
+                <p className="text-sm font-black uppercase tracking-[0.18em] text-primary">
+                  Không có kết quả trong Grid
+                </p>
+                <p className="mt-3 text-sm font-medium leading-7 text-on-surface-variant">
+                  Hãy đổi từ khóa, trạng thái, HR, dự án hoặc xóa bộ lọc Grid
+                  để xem lại toàn bộ hồ sơ.
+                </p>
+                <Button className="mt-5" variant="ghost" onClick={resetCardFilters}>
+                  Xóa lọc Grid
+                </Button>
+              </div>
+            ) : null}
+
+            {cardItems.map((candidate) => {
               const status = candidate.status as CandidateStatusType;
               const meta = candidateStatusMeta[status];
               const reviewMeta =
@@ -784,6 +952,129 @@ export function CandidatesListManager({
         </QuickEditModal>
       ) : null}
     </>
+  );
+}
+
+function CardGridControls({
+  filters,
+  totalCount,
+  visibleCount,
+  hrOptions,
+  projectOptions,
+  onChange,
+  onReset,
+}: {
+  filters: CardFilterState;
+  totalCount: number;
+  visibleCount: number;
+  hrOptions: string[];
+  projectOptions: string[];
+  onChange: <K extends keyof CardFilterState>(
+    key: K,
+    value: CardFilterState[K],
+  ) => void;
+  onReset: () => void;
+}) {
+  return (
+    <div className="rounded-[1.8rem] border border-white/70 bg-white/88 p-4 shadow-[0_18px_45px_rgba(160,57,100,0.08)] backdrop-blur-xl">
+      <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
+        <div>
+          <div className="flex items-center gap-2">
+            <SlidersHorizontal className="size-4 text-primary" />
+            <p className="text-sm font-black text-on-surface">
+              Sắp xếp và lọc Grid
+            </p>
+          </div>
+          <p className="mt-1 text-xs font-semibold uppercase tracking-[0.16em] text-outline">
+            {visibleCount}/{totalCount} hồ sơ, mặc định CV mới nhất lên đầu
+          </p>
+        </div>
+
+        <Button variant="ghost" className="h-10 bg-white" onClick={onReset}>
+          Xóa lọc Grid
+        </Button>
+      </div>
+
+      <div className="mt-4 grid gap-3 md:grid-cols-2 xl:grid-cols-[1.45fr_1fr_1fr_1fr_1fr_1fr]">
+        <div className="relative">
+          <Search className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-outline" />
+          <input
+            value={filters.search}
+            onChange={(event) => onChange("search", event.target.value)}
+            placeholder="Tìm trong Grid..."
+            className="h-12 w-full rounded-[1.1rem] border border-primary/10 bg-white pl-10 pr-4 text-sm font-medium text-on-surface outline-none transition focus:border-primary/20 focus:ring-4 focus:ring-primary/10"
+          />
+        </div>
+
+        <select
+          value={filters.sort}
+          onChange={(event) =>
+            onChange("sort", event.target.value as CardSortMode)
+          }
+          className="h-12 rounded-[1.1rem] border border-primary/10 bg-white px-4 text-sm font-medium text-on-surface outline-none transition focus:border-primary/20 focus:ring-4 focus:ring-primary/10"
+        >
+          <option value="newest">Mới nhất trước</option>
+          <option value="oldest">Cũ nhất trước</option>
+          <option value="nameAsc">Tên A-Z</option>
+          <option value="statusAsc">Trạng thái A-Z</option>
+          <option value="interviewSoonest">Lịch PV gần nhất</option>
+        </select>
+
+        <select
+          value={filters.status}
+          onChange={(event) => onChange("status", event.target.value)}
+          className="h-12 rounded-[1.1rem] border border-primary/10 bg-white px-4 text-sm font-medium text-on-surface outline-none transition focus:border-primary/20 focus:ring-4 focus:ring-primary/10"
+        >
+          <option value="">Tất cả trạng thái</option>
+          {CANDIDATE_STATUSES.map((status) => (
+            <option key={status} value={status}>
+              {candidateStatusMeta[status].label}
+            </option>
+          ))}
+        </select>
+
+        <select
+          value={filters.managerDecision}
+          onChange={(event) =>
+            onChange("managerDecision", event.target.value)
+          }
+          className="h-12 rounded-[1.1rem] border border-primary/10 bg-white px-4 text-sm font-medium text-on-surface outline-none transition focus:border-primary/20 focus:ring-4 focus:ring-primary/10"
+        >
+          <option value="">Tất cả đánh giá</option>
+          {MANAGER_DECISIONS.map((decision) => (
+            <option key={decision} value={decision}>
+              {managerDecisionMeta[decision].label}
+            </option>
+          ))}
+        </select>
+
+        <select
+          value={filters.hrName}
+          onChange={(event) => onChange("hrName", event.target.value)}
+          className="h-12 rounded-[1.1rem] border border-primary/10 bg-white px-4 text-sm font-medium text-on-surface outline-none transition focus:border-primary/20 focus:ring-4 focus:ring-primary/10"
+        >
+          <option value="">Tất cả HR</option>
+          {hrOptions.map((hrName) => (
+            <option key={hrName} value={hrName}>
+              {hrName}
+            </option>
+          ))}
+        </select>
+
+        <select
+          value={filters.projectName}
+          onChange={(event) => onChange("projectName", event.target.value)}
+          className="h-12 rounded-[1.1rem] border border-primary/10 bg-white px-4 text-sm font-medium text-on-surface outline-none transition focus:border-primary/20 focus:ring-4 focus:ring-primary/10"
+        >
+          <option value="">Tất cả dự án</option>
+          {projectOptions.map((projectName) => (
+            <option key={projectName} value={projectName}>
+              {projectName}
+            </option>
+          ))}
+        </select>
+      </div>
+    </div>
   );
 }
 

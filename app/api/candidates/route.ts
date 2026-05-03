@@ -160,6 +160,28 @@ export async function POST(request: Request) {
     );
   }
 
+  const candidateEmail = String(formData.get("email") ?? "").trim();
+  if (candidateEmail) {
+    const duplicateEmail = await prisma.$queryRaw<
+      Array<{ id: string; fullName: string | null }>
+    >`
+      SELECT id, fullName
+      FROM Candidate
+      WHERE email IS NOT NULL
+        AND lower(trim(email)) = lower(${candidateEmail})
+      LIMIT 1
+    `;
+
+    if (duplicateEmail.length) {
+      return NextResponse.json(
+        {
+          error: `Email ${candidateEmail} đã tồn tại trong database${duplicateEmail[0].fullName ? ` cho ứng viên ${duplicateEmail[0].fullName}` : ""}. Không thể thêm mới CV này.`,
+        },
+        { status: 409 },
+      );
+    }
+  }
+
   const file = formData.get("file");
   let cvFileId: string | null = null;
 
@@ -262,7 +284,7 @@ export async function POST(request: Request) {
       cvFileId,
       projectId,
       fullName: String(formData.get("fullName") ?? "") || null,
-      email: String(formData.get("email") ?? "") || null,
+      email: candidateEmail || null,
       phone: String(formData.get("phone") ?? "") || null,
       dateOfBirth: String(formData.get("dateOfBirth") ?? "") || null,
       address: String(formData.get("address") ?? "") || null,
