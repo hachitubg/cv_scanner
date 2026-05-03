@@ -83,6 +83,13 @@ function needsInterviewDetails(status: string) {
   return status === "INTERVIEW" || status === "INTERVIEWED";
 }
 
+function isStatusTransition(entry: {
+  fromStatus: string | null;
+  toStatus: string;
+}) {
+  return Boolean(entry.fromStatus && entry.fromStatus !== entry.toStatus);
+}
+
 export function CandidateDetailForm({
   workspaceId,
   candidate,
@@ -290,6 +297,12 @@ export function CandidateDetailForm({
             </div>
 
             <div className="mt-6 grid gap-5 md:grid-cols-2">
+              <FormInput
+                label="Họ và tên"
+                value={form.fullName}
+                onChange={(value) => updateField("fullName", value)}
+                disabled={fieldsDisabled}
+              />
               <FormInput
                 label="Email"
                 value={form.email}
@@ -685,7 +698,7 @@ export function CandidateDetailForm({
                     {formatDateTime(latestHistory.changedAt)}
                   </p>
                   {latestHistory.note ? (
-                    <p className="mt-2 text-sm font-medium leading-6 text-on-surface-variant">
+                    <p className="mt-2 whitespace-pre-line text-sm font-medium leading-6 text-on-surface-variant">
                       {latestHistory.note}
                     </p>
                   ) : null}
@@ -799,7 +812,7 @@ function HistoryModal({
                       ].label
                     }
                   </Badge>
-                  {entry.fromStatus ? (
+                  {isStatusTransition(entry) ? (
                     <span className="text-xs font-bold text-on-surface-variant">
                       từ{" "}
                       {
@@ -808,13 +821,17 @@ function HistoryModal({
                         ].shortLabel
                       }
                     </span>
-                  ) : null}
+                  ) : (
+                    <span className="text-xs font-bold text-on-surface-variant">
+                      Cập nhật thông tin
+                    </span>
+                  )}
                 </div>
                 <p className="mt-3 text-sm font-semibold text-on-surface">
                   {entry.changedByUser.name} • {formatDateTime(entry.changedAt)}
                 </p>
                 {entry.note ? (
-                  <p className="mt-2 text-sm font-medium leading-6 text-on-surface-variant">
+                  <p className="mt-2 whitespace-pre-line text-sm font-medium leading-6 text-on-surface-variant">
                     {entry.note}
                   </p>
                 ) : null}

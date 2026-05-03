@@ -99,6 +99,51 @@ async function ensureAssignableHr(workspaceId: string, hrId: string) {
   return membership.userId;
 }
 
+function normalizeHistoryValue(value: unknown) {
+  if (value === undefined || value === null || value === "") return "Chưa có";
+  if (Array.isArray(value)) return value.length ? value.join(", ") : "Chưa có";
+  if (typeof value === "string" && value.trim().startsWith("[")) {
+    try {
+      const parsed = JSON.parse(value) as unknown;
+      if (Array.isArray(parsed)) {
+        return parsed.length ? parsed.join(", ") : "Chưa có";
+      }
+    } catch {}
+  }
+  return String(value);
+}
+
+function hasValueChanged(previous: unknown, next: unknown) {
+  return normalizeHistoryValue(previous) !== normalizeHistoryValue(next);
+}
+
+function formatHistoryChange(label: string, previous: unknown, next: unknown) {
+  return `${label}: ${normalizeHistoryValue(previous)} -> ${normalizeHistoryValue(next)}`;
+}
+
+function appendChange(
+  changes: string[],
+  label: string,
+  previous: unknown,
+  next: unknown,
+) {
+  if (next === undefined) return;
+  if (hasValueChanged(previous, next)) {
+    changes.push(formatHistoryChange(label, previous, next));
+  }
+}
+
+async function findDuplicateCandidateEmail(email: string, candidateId: string) {
+  return prisma.$queryRaw<Array<{ id: string; fullName: string | null }>>`
+    SELECT id, fullName
+    FROM Candidate
+    WHERE id != ${candidateId}
+      AND email IS NOT NULL
+      AND lower(trim(email)) = lower(${email})
+    LIMIT 1
+  `;
+}
+
 export async function GET(
   _: Request,
   { params }: { params: Promise<{ candidateId: string }> },
@@ -327,12 +372,194 @@ export async function PATCH(
     }
   }
 
+  const nextEmail =
+    parsed.data.email === undefined ? undefined : parsed.data.email.trim();
+  const emailForUpdate =
+    nextEmail === undefined ? undefined : nextEmail || null;
+  if (
+    nextEmail &&
+    !isManagerSession &&
+    hasValueChanged(currentCandidate.email, nextEmail)
+  ) {
+    const duplicateEmail = await findDuplicateCandidateEmail(
+      nextEmail,
+      candidateId,
+    );
+
+    if (duplicateEmail.length) {
+      return NextResponse.json(
+        {
+          error: `Email ${nextEmail} đã tồn tại trong database${duplicateEmail[0].fullName ? ` cho ứng viên ${duplicateEmail[0].fullName}` : ""}. Không thể cập nhật sang email này.`,
+        },
+        { status: 409 },
+      );
+    }
+  }
+
   const managerDecisionValue =
     parsed.data.managerDecision === undefined
       ? undefined
       : parsed.data.managerDecision === ""
         ? "PENDING"
         : parsed.data.managerDecision;
+  const nextSkillsJson =
+    parsed.data.skills !== undefined
+      ? stringifySkills(parsed.data.skills)
+      : undefined;
+
+  const historyChanges: string[] = [];
+
+  if (!isManagerSession) {
+    appendChange(
+      historyChanges,
+      "Họ và tên",
+      currentCandidate.fullName,
+      parsed.data.fullName,
+    );
+    appendChange(historyChanges, "Email", currentCandidate.email, nextEmail);
+    appendChange(
+      historyChanges,
+      "Số điện thoại",
+      currentCandidate.phone,
+      parsed.data.phone,
+    );
+    appendChange(
+      historyChanges,
+      "Ngày sinh / Năm sinh",
+      currentCandidate.dateOfBirth,
+      parsed.data.dateOfBirth,
+    );
+    appendChange(
+      historyChanges,
+      "Địa chỉ",
+      currentCandidate.address,
+      parsed.data.address,
+    );
+    appendChange(
+      historyChanges,
+      "Quê quán",
+      currentCandidate.hometown,
+      parsed.data.hometown,
+    );
+    appendChange(
+      historyChanges,
+      "Trường học",
+      currentCandidate.school,
+      parsed.data.school,
+    );
+    appendChange(
+      historyChanges,
+      "Năm tốt nghiệp",
+      currentCandidate.graduationYear,
+      parsed.data.graduationYear,
+    );
+    appendChange(
+      historyChanges,
+      "Số năm kinh nghiệm",
+      currentCandidate.yearsOfExperience,
+      parsed.data.yearsOfExperience,
+    );
+    appendChange(
+      historyChanges,
+      "Kỹ năng chính",
+      currentCandidate.skillsJson,
+      nextSkillsJson,
+    );
+    appendChange(
+      historyChanges,
+      "Tóm tắt ứng viên",
+      currentCandidate.summary,
+      parsed.data.summary,
+    );
+    appendChange(
+      historyChanges,
+      "Vị trí ứng tuyển",
+      currentCandidate.position,
+      parsed.data.position,
+    );
+    appendChange(
+      historyChanges,
+      "Nguồn",
+      currentCandidate.source,
+      parsed.data.source,
+    );
+    appendChange(
+      historyChanges,
+      "Mức lương mong muốn",
+      currentCandidate.expectedSalary,
+      parsed.data.expectedSalary,
+    );
+    appendChange(
+      historyChanges,
+      "Mức offer nội bộ",
+      currentCandidate.offerSalary,
+      parsed.data.offerSalary,
+    );
+    appendChange(
+      historyChanges,
+      "Ghi chú nội bộ",
+      currentCandidate.notes,
+      parsed.data.notes,
+    );
+    appendChange(
+      historyChanges,
+      "Ngày phỏng vấn",
+      currentCandidate.interviewDate,
+      parsed.data.interviewDate,
+    );
+    appendChange(
+      historyChanges,
+      "Người phỏng vấn",
+      currentCandidate.interviewerName,
+      parsed.data.interviewerName,
+    );
+    appendChange(
+      historyChanges,
+      "Nhận xét phỏng vấn",
+      currentCandidate.interviewFeedback,
+      parsed.data.interviewFeedback,
+    );
+    appendChange(
+      historyChanges,
+      "HR phụ trách",
+      currentCandidate.hrId,
+      parsed.data.hrId !== undefined ? hrId : undefined,
+    );
+    appendChange(
+      historyChanges,
+      "Dự án",
+      currentCandidate.projectId,
+      parsed.data.projectId !== undefined ? projectId : undefined,
+    );
+  }
+
+  appendChange(
+    historyChanges,
+    "Trạng thái",
+    currentCandidate.status,
+    nextStatus,
+  );
+
+  if (hasManagerReviewUpdate) {
+    appendChange(
+      historyChanges,
+      "Quyết định quản lý",
+      currentCandidate.managerDecision,
+      managerDecisionValue,
+    );
+    appendChange(
+      historyChanges,
+      "Offer manager đề xuất",
+      currentCandidate.managerOfferSalary,
+      parsed.data.managerOfferSalary,
+    );
+    appendChange(
+      historyChanges,
+      "Nhận xét duyệt tuyển",
+      currentCandidate.managerReviewNote,
+      parsed.data.managerReviewNote,
+    );
+  }
 
   const updatedCandidate = await prisma.candidate.update({
     where: { id: candidateId },
@@ -343,7 +570,7 @@ export async function PATCH(
           }
         : {
             fullName: parsed.data.fullName,
-            email: parsed.data.email,
+            email: emailForUpdate,
             phone: parsed.data.phone,
             dateOfBirth: parsed.data.dateOfBirth,
             address: parsed.data.address,
@@ -362,9 +589,7 @@ export async function PATCH(
             interviewFeedback: parsed.data.interviewFeedback,
             hrId,
             projectId,
-            skillsJson: parsed.data.skills
-              ? stringifySkills(parsed.data.skills)
-              : undefined,
+            skillsJson: nextSkillsJson,
             status: nextStatus ?? undefined,
           }),
       ...(hasManagerReviewUpdate
@@ -379,14 +604,22 @@ export async function PATCH(
     },
   });
 
-  if (nextStatus && nextStatus !== currentCandidate.status) {
+  if (historyChanges.length) {
+    const noteParts = [
+      parsed.data.statusNote?.trim(),
+      `Cập nhật: ${historyChanges.join("; ")}`,
+    ].filter(Boolean);
+
     await prisma.statusHistory.create({
       data: {
         candidateId,
-        fromStatus: currentCandidate.status,
-        toStatus: nextStatus,
+        fromStatus:
+          nextStatus && nextStatus !== currentCandidate.status
+            ? currentCandidate.status
+            : currentCandidate.status,
+        toStatus: nextStatus ?? currentCandidate.status,
         changedBy: session.user.id,
-        note: parsed.data.statusNote || null,
+        note: noteParts.join("\n") || null,
       },
     });
   }
