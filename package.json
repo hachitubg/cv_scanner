@@ -23,6 +23,7 @@
     "@mui/material": "^9.0.0",
     "@napi-rs/canvas": "^0.1.99",
     "@prisma/client": "^5.22.0",
+    "@tanstack/react-table": "^8.21.3",
     "@types/node": "^25.6.0",
     "@types/react": "^19.2.14",
     "@types/react-dom": "^19.2.3",

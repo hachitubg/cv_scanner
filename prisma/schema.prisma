@@ -24,6 +24,20 @@ model User {
   managerReviews   Candidate[]       @relation("CandidateManagerReviewer")
   uploadedFiles    CVFile[]          @relation("FileUploader")
   statusChanges    StatusHistory[]
+  preferences      UserPreference[]
+}
+
+model UserPreference {
+  id        String   @id @default(cuid())
+  userId    String
+  key       String
+  value     String
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, key])
 }
 
 model Workspace {
