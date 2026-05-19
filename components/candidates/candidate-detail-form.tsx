@@ -1,7 +1,12 @@
 "use client";
 
 import Link from "next/link";
-import { useMemo, useState, useTransition } from "react";
+import {
+  useMemo,
+  useState,
+  useTransition,
+  type InputHTMLAttributes,
+} from "react";
 import { useRouter } from "next/navigation";
 import { History, X } from "lucide-react";
 
@@ -14,7 +19,7 @@ import {
   formatDateTime,
   managerDecisionMeta,
   managerFinalStatusMeta,
-  parseSkills,
+  toBirthYear,
   toDateTimeLocalValue,
 } from "@/lib/utils";
 import {
@@ -105,13 +110,9 @@ export function CandidateDetailForm({
     fullName: candidate.fullName ?? "",
     email: candidate.email ?? "",
     phone: candidate.phone ?? "",
-    dateOfBirth: candidate.dateOfBirth ?? "",
-    address: candidate.address ?? "",
-    hometown: candidate.hometown ?? "",
+    dateOfBirth: toBirthYear(candidate.dateOfBirth),
     school: candidate.school ?? "",
-    graduationYear: candidate.graduationYear ?? "",
     yearsOfExperience: candidate.yearsOfExperience?.toString() ?? "",
-    skills: parseSkills(candidate.skillsJson).join(", "),
     summary: candidate.summary ?? "",
     position: candidate.position ?? "",
     source: candidate.source ?? "",
@@ -177,11 +178,8 @@ export function CandidateDetailForm({
           fullName: form.fullName,
           email: form.email,
           phone: form.phone,
-          dateOfBirth: form.dateOfBirth,
-          address: form.address,
-          hometown: form.hometown,
+          dateOfBirth: toBirthYear(form.dateOfBirth),
           school: form.school,
-          graduationYear: form.graduationYear,
           summary: form.summary,
           position: form.position,
           source: form.source,
@@ -197,10 +195,6 @@ export function CandidateDetailForm({
             ? new Date(form.interviewDate).toISOString()
             : "",
           interviewerName: form.interviewerName.trim(),
-          skills: form.skills
-            .split(",")
-            .map((item) => item.trim())
-            .filter(Boolean),
           yearsOfExperience: form.yearsOfExperience
             ? Number(form.yearsOfExperience)
             : null,
@@ -316,10 +310,12 @@ export function CandidateDetailForm({
                 disabled={fieldsDisabled}
               />
               <FormInput
-                label="Ngày sinh / Năm sinh"
+                label="Năm sinh"
                 value={form.dateOfBirth}
                 onChange={(value) => updateField("dateOfBirth", value)}
                 disabled={fieldsDisabled}
+                inputMode="numeric"
+                maxLength={4}
               />
               <FormInput
                 label="Số năm kinh nghiệm"
@@ -331,30 +327,6 @@ export function CandidateDetailForm({
                 label="Trường học"
                 value={form.school}
                 onChange={(value) => updateField("school", value)}
-                disabled={fieldsDisabled}
-              />
-              <FormInput
-                label="Năm tốt nghiệp"
-                value={form.graduationYear}
-                onChange={(value) => updateField("graduationYear", value)}
-                disabled={fieldsDisabled}
-              />
-            </div>
-
-            <div className="mt-5">
-              <label className="label">Địa chỉ</label>
-              <Input
-                value={form.address}
-                onChange={(e) => updateField("address", e.target.value)}
-                disabled={fieldsDisabled}
-              />
-            </div>
-
-            <div className="mt-5">
-              <label className="label">Quê quán</label>
-              <Input
-                value={form.hometown}
-                onChange={(e) => updateField("hometown", e.target.value)}
                 disabled={fieldsDisabled}
               />
             </div>
@@ -379,7 +351,7 @@ export function CandidateDetailForm({
                 disabled={fieldsDisabled}
               />
               <FormInput
-                label="Mức offer nội bộ"
+                label="Mức offer dự kiến"
                 value={form.offerSalary}
                 onChange={(value) => updateField("offerSalary", value)}
                 disabled={fieldsDisabled}
@@ -415,15 +387,6 @@ export function CandidateDetailForm({
                   ))}
                 </select>
               </div>
-            </div>
-
-            <div className="mt-5">
-              <label className="label">Kỹ năng chính</label>
-              <Input
-                value={form.skills}
-                onChange={(e) => updateField("skills", e.target.value)}
-                disabled={fieldsDisabled}
-              />
             </div>
 
             <div className="mt-5">
@@ -728,11 +691,15 @@ function FormInput({
   value,
   onChange,
   disabled,
+  inputMode,
+  maxLength,
 }: {
   label: string;
   value: string;
   onChange: (value: string) => void;
   disabled?: boolean;
+  inputMode?: InputHTMLAttributes<HTMLInputElement>["inputMode"];
+  maxLength?: number;
 }) {
   return (
     <div>
@@ -741,6 +708,8 @@ function FormInput({
         value={value}
         onChange={(event) => onChange(event.target.value)}
         disabled={disabled}
+        inputMode={inputMode}
+        maxLength={maxLength}
       />
     </div>
   );

@@ -7,7 +7,7 @@ import { KeyRound, RefreshCcw, Sparkles } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
-import { cn } from "@/lib/utils";
+import { cn, toBirthYear } from "@/lib/utils";
 import type {
   ParsedCVResult,
   ProjectOption,
@@ -31,10 +31,7 @@ const EMPTY_FORM = {
   email: "",
   phone: "",
   dateOfBirth: "",
-  address: "",
-  hometown: "",
   school: "",
-  graduationYear: "",
   yearsOfExperience: "",
   summary: "",
   position: "",
@@ -43,7 +40,6 @@ const EMPTY_FORM = {
   offerSalary: "",
   notes: "",
   interviewFeedback: "",
-  skills: "",
   hrId: "",
   projectId: "",
   status: "NEW",
@@ -144,18 +140,14 @@ export function UploadCandidateForm({
       fullName: data.fullName ?? current.fullName,
       email: data.email ?? current.email,
       phone: data.phone ?? current.phone,
-      dateOfBirth: data.dateOfBirth ?? current.dateOfBirth,
-      address: data.address ?? current.address,
-      hometown: data.hometown ?? current.hometown,
+      dateOfBirth: toBirthYear(data.dateOfBirth) || current.dateOfBirth,
       school: data.school ?? current.school,
-      graduationYear: data.graduationYear ?? current.graduationYear,
       yearsOfExperience:
         data.yearsOfExperience !== undefined
           ? String(data.yearsOfExperience)
           : current.yearsOfExperience,
       position: data.position ?? current.position,
       summary: data.summary ?? current.summary,
-      skills: data.skills?.join(", ") ?? current.skills,
       notes: data.notes ?? current.notes,
     }));
   }
@@ -488,10 +480,12 @@ export function UploadCandidateForm({
               />
             </div>
             <div>
-              <label className="label">Ngày sinh / Năm sinh</label>
+              <label className="label">Năm sinh</label>
               <Input
                 value={form.dateOfBirth}
                 onChange={(e) => updateField("dateOfBirth", e.target.value)}
+                inputMode="numeric"
+                maxLength={4}
               />
             </div>
             <div>
@@ -499,13 +493,6 @@ export function UploadCandidateForm({
               <Input
                 value={form.school}
                 onChange={(e) => updateField("school", e.target.value)}
-              />
-            </div>
-            <div>
-              <label className="label">Năm tốt nghiệp</label>
-              <Input
-                value={form.graduationYear}
-                onChange={(e) => updateField("graduationYear", e.target.value)}
               />
             </div>
             <div>
@@ -517,21 +504,6 @@ export function UploadCandidateForm({
                 }
               />
             </div>
-            <div>
-              <label className="label">Quê quán</label>
-              <Input
-                value={form.hometown}
-                onChange={(e) => updateField("hometown", e.target.value)}
-              />
-            </div>
-          </div>
-
-          <div className="mt-5">
-            <label className="label">Địa chỉ</label>
-            <Input
-              value={form.address}
-              onChange={(e) => updateField("address", e.target.value)}
-            />
           </div>
 
           <div className="mt-5 grid gap-5 md:grid-cols-2">
@@ -580,28 +552,19 @@ export function UploadCandidateForm({
               </select>
             </div>
             <div>
-              <label className="label">Mức offer dự kiến</label>
-              <Input
-                value={form.offerSalary}
-                onChange={(e) => updateField("offerSalary", e.target.value)}
-              />
-            </div>
-            <div>
               <label className="label">Mức lương mong muốn</label>
               <Input
                 value={form.expectedSalary}
                 onChange={(e) => updateField("expectedSalary", e.target.value)}
               />
             </div>
-          </div>
-
-          <div className="mt-5">
-            <label className="label">Kỹ năng chính</label>
-            <Input
-              value={form.skills}
-              onChange={(e) => updateField("skills", e.target.value)}
-              placeholder="React, Next.js, TypeScript"
-            />
+            <div>
+              <label className="label">Mức offer dự kiến</label>
+              <Input
+                value={form.offerSalary}
+                onChange={(e) => updateField("offerSalary", e.target.value)}
+              />
+            </div>
           </div>
 
           <div className="mt-5">

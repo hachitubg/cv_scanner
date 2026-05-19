@@ -195,8 +195,8 @@ const defaultCandidateColumnOrder: CandidateColumnId[] = [
   "createdAt",
   "interview",
   "managerDecision",
-  "managerOfferSalary",
   "expectedSalary",
+  "managerOfferSalary",
   "source",
   "cvInfo",
   "actions",
@@ -1296,9 +1296,6 @@ function buildCandidateColumns({
             >
               {candidate.fullName || "Chưa có tên ứng viên"}
             </Link>
-            <p className="text-[11px] font-bold uppercase tracking-[0.14em] text-outline">
-              ID {candidate.id.slice(0, 8)}
-            </p>
           </div>
         );
       },

@@ -33,6 +33,21 @@ export function toDateTimeLocalValue(value?: string | null) {
   return local.toISOString().slice(0, 16);
 }
 
+export function toBirthYear(value?: string | null) {
+  if (!value) return "";
+
+  const trimmed = value.trim();
+  const matchedYear = trimmed.match(/\b(?:19|20)\d{2}\b/)?.[0];
+  if (matchedYear) return matchedYear;
+
+  const parsed = new Date(trimmed);
+  if (!Number.isNaN(parsed.getTime())) {
+    return String(parsed.getFullYear());
+  }
+
+  return trimmed.slice(0, 4);
+}
+
 export const candidateStatusMeta: Record<
   CandidateStatusType,
   { label: string; className: string; shortLabel: string }

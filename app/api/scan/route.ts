@@ -4,6 +4,7 @@ import { extractFieldsWithGemini, GeminiApiError } from "@/lib/ai/gemini-cv-revi
 import { auth } from "@/lib/auth";
 import { extractFields } from "@/lib/parser/extract-fields";
 import { extractTextFromFile } from "@/lib/parser/extract-text";
+import { toBirthYear } from "@/lib/utils";
 import type { ParsedCVResult } from "@/types";
 
 function mergeParsedResults(base: ParsedCVResult, enriched: ParsedCVResult): ParsedCVResult {
@@ -14,7 +15,7 @@ function mergeParsedResults(base: ParsedCVResult, enriched: ParsedCVResult): Par
     fullName: enriched.fullName ?? base.fullName,
     email: enriched.email ?? base.email,
     phone: enriched.phone ?? base.phone,
-    dateOfBirth: enriched.dateOfBirth ?? base.dateOfBirth,
+    dateOfBirth: toBirthYear(enriched.dateOfBirth ?? base.dateOfBirth) || undefined,
     address: enriched.address ?? base.address,
     hometown: enriched.hometown ?? base.hometown,
     school: enriched.school ?? base.school,
@@ -25,6 +26,13 @@ function mergeParsedResults(base: ParsedCVResult, enriched: ParsedCVResult): Par
     skills: mergedSkills.length ? mergedSkills : undefined,
     notes: mergedNotes || undefined,
     rawText: base.rawText,
+  };
+}
+
+function normalizeParsedResult(result: ParsedCVResult): ParsedCVResult {
+  return {
+    ...result,
+    dateOfBirth: toBirthYear(result.dateOfBirth) || undefined,
   };
 }
 
@@ -64,7 +72,7 @@ export async function POST(request: Request) {
   try {
     const buffer = Buffer.from(await file.arrayBuffer());
     const rawText = await extractTextFromFile(file.name, buffer, file.type);
-    const parsed = extractFields(rawText);
+    const parsed = normalizeParsedResult(extractFields(rawText));
 
     if (scanMode !== "ai") {
       return NextResponse.json(parsed);
@@ -79,7 +87,9 @@ export async function POST(request: Request) {
       return errorResponse(400, "Thiếu Gemini model để thực hiện AI Scan.");
     }
 
-    const aiParsed = await extractFieldsWithGemini(rawText, geminiApiKey, geminiModel);
+    const aiParsed = normalizeParsedResult(
+      await extractFieldsWithGemini(rawText, geminiApiKey, geminiModel),
+    );
     return NextResponse.json(mergeParsedResults(parsed, aiParsed));
   } catch (error) {
     const message = error instanceof Error ? error.message : "";

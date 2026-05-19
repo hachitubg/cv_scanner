@@ -12,7 +12,7 @@ import {
   requireWorkspaceHrAdmin,
 } from "@/lib/permissions";
 import { prisma } from "@/lib/prisma";
-import { stringifySkills } from "@/lib/utils";
+import { stringifySkills, toBirthYear } from "@/lib/utils";
 import { CANDIDATE_STATUSES, MANAGER_DECISIONS } from "@/types";
 
 const candidateUpdateSchema = z.object({
@@ -402,6 +402,10 @@ export async function PATCH(
       : parsed.data.managerDecision === ""
         ? "PENDING"
         : parsed.data.managerDecision;
+  const nextDateOfBirth =
+    parsed.data.dateOfBirth !== undefined
+      ? toBirthYear(parsed.data.dateOfBirth)
+      : undefined;
   const nextSkillsJson =
     parsed.data.skills !== undefined
       ? stringifySkills(parsed.data.skills)
@@ -425,9 +429,9 @@ export async function PATCH(
     );
     appendChange(
       historyChanges,
-      "Ngày sinh / Năm sinh",
+      "Năm sinh",
       currentCandidate.dateOfBirth,
-      parsed.data.dateOfBirth,
+      nextDateOfBirth,
     );
     appendChange(
       historyChanges,
@@ -572,7 +576,7 @@ export async function PATCH(
             fullName: parsed.data.fullName,
             email: emailForUpdate,
             phone: parsed.data.phone,
-            dateOfBirth: parsed.data.dateOfBirth,
+            dateOfBirth: nextDateOfBirth,
             address: parsed.data.address,
             hometown: parsed.data.hometown,
             school: parsed.data.school,

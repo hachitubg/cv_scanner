@@ -9,7 +9,7 @@ import {
 import { extractTextFromFile } from "@/lib/parser/extract-text";
 import { saveUploadedFile } from "@/lib/files";
 import { prisma } from "@/lib/prisma";
-import { stringifySkills } from "@/lib/utils";
+import { stringifySkills, toBirthYear } from "@/lib/utils";
 
 function parseIntOrNull(value: FormDataEntryValue | null) {
   if (!value) return null;
@@ -286,7 +286,7 @@ export async function POST(request: Request) {
       fullName: String(formData.get("fullName") ?? "") || null,
       email: candidateEmail || null,
       phone: String(formData.get("phone") ?? "") || null,
-      dateOfBirth: String(formData.get("dateOfBirth") ?? "") || null,
+      dateOfBirth: toBirthYear(String(formData.get("dateOfBirth") ?? "")) || null,
       address: String(formData.get("address") ?? "") || null,
       hometown: String(formData.get("hometown") ?? "") || null,
       school: String(formData.get("school") ?? "") || null,
