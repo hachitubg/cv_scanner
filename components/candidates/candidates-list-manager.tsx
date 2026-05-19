@@ -131,6 +131,7 @@ type CandidateTableColumnSettings = {
   columnVisibility: VisibilityState;
   columnOrder: ColumnOrderState;
   columnPinning: ColumnPinningState;
+  hiddenStatuses: CandidateStatusType[];
 };
 
 type TableSettingsStatus = "loading" | "idle" | "saving" | "saved" | "error";
@@ -213,9 +214,14 @@ const defaultColumnPinning: ColumnPinningState = {
 };
 
 const candidateColumnIdSet = new Set<string>(defaultCandidateColumnOrder);
+const candidateStatusSet = new Set<string>(CANDIDATE_STATUSES);
 
 function isCandidateColumnId(value: unknown): value is CandidateColumnId {
   return typeof value === "string" && candidateColumnIdSet.has(value);
+}
+
+function isCandidateStatus(value: unknown): value is CandidateStatusType {
+  return typeof value === "string" && candidateStatusSet.has(value);
 }
 
 function normalizeColumnOrder(value: unknown): ColumnOrderState {
@@ -273,6 +279,17 @@ function normalizeColumnPinning(value: unknown): ColumnPinningState {
   };
 }
 
+function normalizeHiddenStatuses(value: unknown): CandidateStatusType[] {
+  if (!Array.isArray(value)) return [];
+
+  const seen = new Set<string>();
+  return value.filter((status): status is CandidateStatusType => {
+    if (!isCandidateStatus(status) || seen.has(status)) return false;
+    seen.add(status);
+    return true;
+  });
+}
+
 function normalizeCandidateTableColumnSettings(
   value: unknown,
 ): CandidateTableColumnSettings | null {
@@ -282,12 +299,14 @@ function normalizeCandidateTableColumnSettings(
     columnVisibility?: unknown;
     columnOrder?: unknown;
     columnPinning?: unknown;
+    hiddenStatuses?: unknown;
   };
 
   return {
     columnVisibility: normalizeColumnVisibility(settings.columnVisibility),
     columnOrder: normalizeColumnOrder(settings.columnOrder),
     columnPinning: normalizeColumnPinning(settings.columnPinning),
+    hiddenStatuses: normalizeHiddenStatuses(settings.hiddenStatuses),
   };
 }
 
@@ -790,6 +809,9 @@ function CandidatesTable({
   const [columnPinning, setColumnPinning] = useState<ColumnPinningState>(
     defaultColumnPinning,
   );
+  const [hiddenStatuses, setHiddenStatuses] = useState<CandidateStatusType[]>(
+    [],
+  );
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [isTableFullscreen, setIsTableFullscreen] = useState(false);
   const [portalReady, setPortalReady] = useState(false);
@@ -822,8 +844,9 @@ function CandidatesTable({
       columnVisibility,
       columnOrder,
       columnPinning,
+      hiddenStatuses,
     }),
-    [columnOrder, columnPinning, columnVisibility],
+    [columnOrder, columnPinning, columnVisibility, hiddenStatuses],
   );
 
   useEffect(() => {
@@ -851,6 +874,7 @@ function CandidatesTable({
           setColumnVisibility(settings.columnVisibility);
           setColumnOrder(settings.columnOrder);
           setColumnPinning(settings.columnPinning);
+          setHiddenStatuses(settings.hiddenStatuses);
           setTableSettingsStatus("saved");
         } else {
           setTableSettingsStatus("idle");
@@ -903,9 +927,19 @@ function CandidatesTable({
     };
   }, [settingsLoaded, tableColumnSettingsPayload]);
 
+  const tableCandidates = useMemo(() => {
+    if (!hiddenStatuses.length) return candidates;
+
+    const hiddenStatusSet = new Set(hiddenStatuses);
+    return candidates.filter(
+      (candidate) =>
+        !hiddenStatusSet.has(candidate.status as CandidateStatusType),
+    );
+  }, [candidates, hiddenStatuses]);
+
   // eslint-disable-next-line react-hooks/incompatible-library
   const table = useReactTable({
-    data: candidates,
+    data: tableCandidates,
     columns,
     state: {
       sorting,
@@ -941,6 +975,15 @@ function CandidatesTable({
     setColumnOrder(defaultCandidateColumnOrder);
     setColumnVisibility(defaultColumnVisibility);
     setColumnPinning(defaultColumnPinning);
+    setHiddenStatuses([]);
+  }
+
+  function toggleHiddenStatus(status: CandidateStatusType) {
+    setHiddenStatuses((current) =>
+      current.includes(status)
+        ? current.filter((item) => item !== status)
+        : [...current, status],
+    );
   }
 
   function reorderColumn(draggedColumnId: string, targetColumnId: string) {
@@ -1234,8 +1277,10 @@ function CandidatesTable({
             <div className="overflow-y-auto">
               <ColumnSettingsPanel
                 columns={orderedColumns}
+                hiddenStatuses={hiddenStatuses}
                 onReorderColumn={reorderColumn}
                 onMoveColumn={moveColumn}
+                onToggleHiddenStatus={toggleHiddenStatus}
                 onReset={resetColumnLayout}
               />
             </div>
@@ -1623,13 +1668,17 @@ function ColumnFilter({
 
 function ColumnSettingsPanel({
   columns,
+  hiddenStatuses,
   onReorderColumn,
   onMoveColumn,
+  onToggleHiddenStatus,
   onReset,
 }: {
   columns: Column<CandidateListItem, unknown>[];
+  hiddenStatuses: CandidateStatusType[];
   onReorderColumn: (draggedColumnId: string, targetColumnId: string) => void;
   onMoveColumn: (columnId: string, direction: -1 | 1) => void;
+  onToggleHiddenStatus: (status: CandidateStatusType) => void;
   onReset: () => void;
 }) {
   const [draggingColumnId, setDraggingColumnId] = useState<string | null>(null);
@@ -1655,6 +1704,65 @@ function ColumnSettingsPanel({
         <Button variant="ghost" className="h-10 bg-white px-4" onClick={onReset}>
           Khôi phục mặc định
         </Button>
+      </div>
+
+      <div className="mt-5 rounded-[1.4rem] border border-primary/10 bg-surface-container-low p-4">
+        <div className="flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">
+          <div>
+            <p className="text-sm font-black text-on-surface">
+              Ẩn trạng thái khỏi bảng Excel
+            </p>
+            <p className="mt-1 text-sm font-medium leading-6 text-on-surface-variant">
+              Các trạng thái được chọn sẽ không xuất hiện trong danh sách bảng.
+            </p>
+          </div>
+          {hiddenStatuses.length ? (
+            <p className="text-xs font-black uppercase tracking-[0.14em] text-primary">
+              Đang ẩn {hiddenStatuses.length} trạng thái
+            </p>
+          ) : null}
+        </div>
+
+        <div className="mt-4 grid gap-2 sm:grid-cols-2 xl:grid-cols-3">
+          {CANDIDATE_STATUSES.map((status) => {
+            const meta = candidateStatusMeta[status];
+            const hidden = hiddenStatuses.includes(status);
+
+            return (
+              <label
+                key={status}
+                className={cn(
+                  "flex cursor-pointer items-center justify-between gap-3 rounded-[1rem] border px-3 py-2 transition",
+                  hidden
+                    ? "border-primary/30 bg-white shadow-[0_10px_24px_rgba(160,57,100,0.08)]"
+                    : "border-white/70 bg-white/65 hover:bg-white",
+                )}
+              >
+                <span className="flex min-w-0 items-center gap-2">
+                  <input
+                    type="checkbox"
+                    checked={hidden}
+                    onChange={() => onToggleHiddenStatus(status)}
+                    className="size-4 accent-primary"
+                  />
+                  <span className="truncate text-sm font-black text-on-surface">
+                    {meta.label}
+                  </span>
+                </span>
+                <span
+                  className={cn(
+                    "rounded-full px-2.5 py-1 text-[10px] font-black uppercase tracking-[0.08em]",
+                    hidden
+                      ? "bg-primary text-white"
+                      : "bg-surface-container-high text-outline",
+                  )}
+                >
+                  {hidden ? "Ẩn" : "Hiện"}
+                </span>
+              </label>
+            );
+          })}
+        </div>
       </div>
 
       <div className="mt-4 grid gap-3 md:grid-cols-2 xl:grid-cols-3">
