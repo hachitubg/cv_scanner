@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useMemo, useState, useTransition } from "react";
+import { Fragment, useEffect, useMemo, useState, useTransition } from "react";
 import { createPortal } from "react-dom";
 import { useRouter } from "next/navigation";
 import {
@@ -15,6 +15,7 @@ import {
   type ColumnFiltersState,
   type ColumnOrderState,
   type ColumnPinningState,
+  type Row,
   type SortingState,
   type VisibilityState,
 } from "@tanstack/react-table";
@@ -23,6 +24,8 @@ import {
   ArrowUp,
   BriefcaseBusiness,
   CalendarDays,
+  ChevronDown,
+  ChevronRight,
   CheckCircle2,
   ClipboardCheck,
   CircleUserRound,
@@ -814,6 +817,10 @@ function CandidatesTable({
   );
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [isTableFullscreen, setIsTableFullscreen] = useState(false);
+  const [groupByStatus, setGroupByStatus] = useState(false);
+  const [collapsedStatusGroups, setCollapsedStatusGroups] = useState<
+    CandidateStatusType[]
+  >([]);
   const [portalReady, setPortalReady] = useState(false);
   const [settingsLoaded, setSettingsLoaded] = useState(false);
   const [tableSettingsStatus, setTableSettingsStatus] =
@@ -965,6 +972,23 @@ function CandidatesTable({
     .filter((column): column is Column<CandidateListItem, unknown> =>
       Boolean(column),
     );
+  const tableRows = table.getRowModel().rows;
+  const visibleColumnCount = table.getVisibleLeafColumns().length;
+  const groupedStatusRows = useMemo(() => {
+    const groups = new Map<CandidateStatusType, Row<CandidateListItem>[]>();
+
+    CANDIDATE_STATUSES.forEach((status) => groups.set(status, []));
+
+    tableRows.forEach((row) => {
+      const status = row.original.status as CandidateStatusType;
+      groups.get(status)?.push(row);
+    });
+
+    return CANDIDATE_STATUSES.map((status) => ({
+      status,
+      rows: groups.get(status) ?? [],
+    })).filter((group) => group.rows.length > 0);
+  }, [tableRows]);
 
   function resetTableControls() {
     setSorting([{ id: "createdAt", desc: true }]);
@@ -980,6 +1004,14 @@ function CandidatesTable({
 
   function toggleHiddenStatus(status: CandidateStatusType) {
     setHiddenStatuses((current) =>
+      current.includes(status)
+        ? current.filter((item) => item !== status)
+        : [...current, status],
+    );
+  }
+
+  function toggleStatusGroup(status: CandidateStatusType) {
+    setCollapsedStatusGroups((current) =>
       current.includes(status)
         ? current.filter((item) => item !== status)
         : [...current, status],
@@ -1060,6 +1092,36 @@ function CandidatesTable({
     };
   }, [isTableFullscreen]);
 
+  function renderCandidateTableRow(row: Row<CandidateListItem>) {
+    const status = row.original.status as CandidateStatusType;
+
+    return (
+      <tr
+        key={row.id}
+        className={cn(
+          "group align-top transition hover:brightness-[0.985]",
+          statusSurfaceMap[status],
+        )}
+      >
+        {row.getVisibleCells().map((cell) => (
+          <td
+            key={cell.id}
+            className={cn(
+              "border-b border-white/75 px-4 py-4 text-sm shadow-[inset_0_-1px_0_rgba(255,255,255,0.6)]",
+              cell.column.getIsPinned() && "bg-white/95",
+            )}
+            style={{
+              width: cell.column.getSize(),
+              ...getPinnedColumnStyle(cell.column),
+            }}
+          >
+            {flexRender(cell.column.columnDef.cell, cell.getContext())}
+          </td>
+        ))}
+      </tr>
+    );
+  }
+
   const tableShell = (
     <div
       className={cn(
@@ -1097,6 +1159,19 @@ function CandidatesTable({
           >
             <FilterX className="size-4" />
             Xóa lọc/sắp xếp
+          </Button>
+          <Button
+            variant="ghost"
+            className={cn(
+              "h-10 gap-2 px-4 shadow-[0_10px_24px_rgba(15,23,42,0.06)]",
+              groupByStatus
+                ? "bg-primary text-white hover:bg-primary/90 hover:text-white"
+                : "bg-white",
+            )}
+            onClick={() => setGroupByStatus((current) => !current)}
+          >
+            <Table2 className="size-4" />
+            {groupByStatus ? "Đang gom trạng thái" : "Gom trạng thái"}
           </Button>
           <Button
             variant="ghost"
@@ -1179,41 +1254,60 @@ function CandidatesTable({
             ))}
           </thead>
           <tbody>
-            {table.getRowModel().rows.map((row) => {
-              const status = row.original.status as CandidateStatusType;
-              return (
-                <tr
-                  key={row.id}
-                  className={cn(
-                    "group align-top transition hover:brightness-[0.985]",
-                    statusSurfaceMap[status],
-                  )}
-                >
-                  {row.getVisibleCells().map((cell) => (
-                    <td
-                      key={cell.id}
-                      className={cn(
-                        "border-b border-white/75 px-4 py-4 text-sm shadow-[inset_0_-1px_0_rgba(255,255,255,0.6)]",
-                        cell.column.getIsPinned() && "bg-white/95",
-                      )}
-                      style={{
-                        width: cell.column.getSize(),
-                        ...getPinnedColumnStyle(cell.column),
-                      }}
-                    >
-                      {flexRender(
-                        cell.column.columnDef.cell,
-                        cell.getContext(),
-                      )}
-                    </td>
-                  ))}
-                </tr>
-              );
-            })}
-            {!table.getRowModel().rows.length ? (
+            {groupByStatus
+              ? groupedStatusRows.map((group) => {
+                  const meta = candidateStatusMeta[group.status];
+                  const collapsed = collapsedStatusGroups.includes(
+                    group.status,
+                  );
+
+                  return (
+                    <Fragment key={group.status}>
+                      <tr>
+                        <td
+                          colSpan={visibleColumnCount}
+                          className={cn(
+                            "sticky left-0 z-10 border-b border-white/80 p-0",
+                            statusSurfaceMap[group.status],
+                          )}
+                        >
+                          <button
+                            type="button"
+                            onClick={() => toggleStatusGroup(group.status)}
+                            className="flex w-full items-center justify-between gap-4 bg-white/55 px-4 py-3 text-left transition hover:bg-white/85"
+                          >
+                            <span className="flex min-w-0 flex-wrap items-center gap-3">
+                              <span className="inline-flex size-8 shrink-0 items-center justify-center rounded-full bg-white text-primary shadow-[0_8px_20px_rgba(15,23,42,0.08)]">
+                                {collapsed ? (
+                                  <ChevronRight className="size-4" />
+                                ) : (
+                                  <ChevronDown className="size-4" />
+                                )}
+                              </span>
+                              <Badge className={meta.className}>
+                                {meta.label}
+                              </Badge>
+                              <span className="text-sm font-black text-on-surface">
+                                {group.rows.length} hồ sơ
+                              </span>
+                            </span>
+                            <span className="shrink-0 text-xs font-black uppercase tracking-[0.14em] text-outline">
+                              {collapsed ? "Mở nhóm" : "Thu nhóm"}
+                            </span>
+                          </button>
+                        </td>
+                      </tr>
+                      {collapsed
+                        ? null
+                        : group.rows.map((row) => renderCandidateTableRow(row))}
+                    </Fragment>
+                  );
+                })
+              : tableRows.map((row) => renderCandidateTableRow(row))}
+            {!tableRows.length ? (
               <tr>
                 <td
-                  colSpan={table.getVisibleLeafColumns().length}
+                  colSpan={visibleColumnCount}
                   className="bg-white px-6 py-10 text-center text-sm font-semibold text-on-surface-variant"
                 >
                   Không có hồ sơ phù hợp bộ lọc đang chọn.
