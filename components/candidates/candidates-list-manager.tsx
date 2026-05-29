@@ -75,6 +75,7 @@ type CandidateListItem = {
   notes: string | null;
   status: string;
   createdAt: Date | string;
+  updatedAt: Date | string;
   interviewDate: string | null;
   interviewerName: string | null;
   projectName: string | null;
@@ -121,6 +122,7 @@ type CandidateColumnId =
   | "source"
   | "project"
   | "createdAt"
+  | "updatedAt"
   | "interview"
   | "managerDecision"
   | "managerOfferSalary"
@@ -166,6 +168,7 @@ const candidateColumnLabels: Record<CandidateColumnId, string> = {
   source: "Nguồn",
   project: "Dự án",
   createdAt: "Ngày nhận",
+  updatedAt: "Cập nhật",
   interview: "Phỏng vấn",
   managerDecision: "Quản lý",
   managerOfferSalary: "Offer",
@@ -180,6 +183,7 @@ const defaultCandidateColumnOrder: CandidateColumnId[] = [
   "hr",
   "project",
   "createdAt",
+  "updatedAt",
   "interview",
   "managerDecision",
   "expectedSalary",
@@ -746,7 +750,7 @@ function CandidatesTable({
   onReview: (candidateId: string) => void;
 }) {
   const [sorting, setSorting] = useState<SortingState>([
-    { id: "createdAt", desc: true },
+    { id: "updatedAt", desc: true },
   ]);
   const [columnFilters, setColumnFilters] = useState<ColumnFiltersState>([]);
   const [columnVisibility, setColumnVisibility] = useState<VisibilityState>(
@@ -937,7 +941,7 @@ function CandidatesTable({
   }, [tableRows]);
 
   function resetTableControls() {
-    setSorting([{ id: "createdAt", desc: true }]);
+    setSorting([{ id: "updatedAt", desc: true }]);
     setColumnFilters([]);
   }
 
@@ -1058,6 +1062,8 @@ function CandidatesTable({
             )}
             style={{
               width: cell.column.getSize(),
+              minWidth: cell.column.getSize(),
+              maxWidth: cell.column.getSize(),
               ...getPinnedColumnStyle(cell.column),
             }}
           >
@@ -1158,7 +1164,7 @@ function CandidatesTable({
         )}
       >
         <table
-          className="w-full min-w-[1900px] border-separate border-spacing-0 text-left"
+          className="w-full min-w-[1900px] table-fixed border-separate border-spacing-0 text-left"
           style={{ width: table.getTotalSize() }}
         >
           <thead>
@@ -1170,6 +1176,8 @@ function CandidatesTable({
                     className="sticky top-0 z-20 border-b border-primary/10 bg-white/95 px-4 py-3 align-top shadow-[inset_0_-1px_0_rgba(160,57,100,0.08)] backdrop-blur"
                     style={{
                       width: header.getSize(),
+                      minWidth: header.getSize(),
+                      maxWidth: header.getSize(),
                       ...getPinnedColumnStyle(header.column, true),
                     }}
                   >
@@ -1369,7 +1377,7 @@ function buildCandidateColumns({
       id: "candidate",
       accessorFn: (candidate) => candidate.fullName ?? "",
       header: candidateColumnLabels.candidate,
-      size: 260,
+      size: 220,
       enableHiding: false,
       cell: ({ row }) => {
         const candidate = row.original;
@@ -1503,6 +1511,19 @@ function buildCandidateColumns({
       cell: ({ row }) => (
         <p className="font-semibold text-on-surface">
           {formatDate(row.original.createdAt)}
+        </p>
+      ),
+    },
+    {
+      id: "updatedAt",
+      accessorFn: (candidate) => formatDateTime(candidate.updatedAt),
+      sortingFn: (left, right) =>
+        getTime(left.original.updatedAt) - getTime(right.original.updatedAt),
+      header: candidateColumnLabels.updatedAt,
+      size: 170,
+      cell: ({ row }) => (
+        <p className="font-semibold text-on-surface">
+          {formatDateTime(row.original.updatedAt)}
         </p>
       ),
     },

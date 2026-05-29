@@ -101,6 +101,8 @@ export type WorkspaceDropdownOption = {
 export type WorkspaceTodo = {
   id: string;
   workspaceId: string;
+  assignedToId?: string | null;
+  workDate?: string | null;
   title: string;
   description?: string | null;
   done: boolean;

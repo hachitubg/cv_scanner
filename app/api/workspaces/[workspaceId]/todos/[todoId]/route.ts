@@ -9,6 +9,8 @@ const todoUpdateSchema = z
   .object({
     title: z.string().trim().min(2, "Tên việc cần làm phải có ít nhất 2 ký tự.").optional(),
     description: z.string().trim().optional(),
+    assignedToId: z.string().trim().nullable().optional(),
+    workDate: z.string().trim().regex(/^\d{4}-\d{2}-\d{2}$/, "Vui lòng chọn ngày hợp lệ.").optional(),
     done: z.boolean().optional(),
   })
   .refine((value) => Object.keys(value).length > 0, {
@@ -56,6 +58,23 @@ export async function PATCH(
     );
   }
 
+  if (parsed.data.assignedToId) {
+    const assignee = await prisma.workspaceMember.findFirst({
+      where: {
+        workspaceId,
+        userId: parsed.data.assignedToId,
+        role: { not: "MANAGER" },
+      },
+    });
+
+    if (!assignee) {
+      return NextResponse.json(
+        { error: "HR được phân công không thuộc workspace này." },
+        { status: 400 },
+      );
+    }
+  }
+
   const updatedTodo = await prisma.workspaceTodo.update({
     where: { id: todoId },
     data: {
@@ -63,6 +82,10 @@ export async function PATCH(
       ...(parsed.data.description !== undefined
         ? { description: parsed.data.description || null }
         : {}),
+      ...(parsed.data.assignedToId !== undefined
+        ? { assignedToId: parsed.data.assignedToId || null }
+        : {}),
+      ...(parsed.data.workDate !== undefined ? { workDate: parsed.data.workDate } : {}),
       ...(parsed.data.done !== undefined ? { done: parsed.data.done } : {}),
     },
   });

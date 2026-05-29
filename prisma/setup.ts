@@ -116,6 +116,8 @@ CREATE INDEX "WorkspaceDropdownOption_workspaceId_type_idx"
 CREATE TABLE "WorkspaceTodo" (
   "id" TEXT NOT NULL PRIMARY KEY,
   "workspaceId" TEXT NOT NULL,
+  "assignedToId" TEXT,
+  "workDate" TEXT,
   "title" TEXT NOT NULL,
   "description" TEXT,
   "done" BOOLEAN NOT NULL DEFAULT false,
@@ -123,7 +125,10 @@ CREATE TABLE "WorkspaceTodo" (
   "updatedAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
   CONSTRAINT "WorkspaceTodo_workspaceId_fkey"
     FOREIGN KEY ("workspaceId") REFERENCES "Workspace" ("id")
-    ON DELETE CASCADE ON UPDATE CASCADE
+    ON DELETE CASCADE ON UPDATE CASCADE,
+  CONSTRAINT "WorkspaceTodo_assignedToId_fkey"
+    FOREIGN KEY ("assignedToId") REFERENCES "User" ("id")
+    ON DELETE SET NULL ON UPDATE CASCADE
 );
 
 CREATE INDEX "WorkspaceTodo_workspaceId_done_idx"
@@ -131,6 +136,15 @@ CREATE INDEX "WorkspaceTodo_workspaceId_done_idx"
 
 CREATE INDEX "WorkspaceTodo_workspaceId_createdAt_idx"
   ON "WorkspaceTodo"("workspaceId", "createdAt");
+
+CREATE INDEX "WorkspaceTodo_workspaceId_updatedAt_idx"
+  ON "WorkspaceTodo"("workspaceId", "updatedAt");
+
+CREATE INDEX "WorkspaceTodo_workspaceId_assignedToId_idx"
+  ON "WorkspaceTodo"("workspaceId", "assignedToId");
+
+CREATE INDEX "WorkspaceTodo_workspaceId_workDate_idx"
+  ON "WorkspaceTodo"("workspaceId", "workDate");
 
 CREATE TABLE "Candidate" (
   "id" TEXT NOT NULL PRIMARY KEY,

@@ -11,6 +11,8 @@ import { prisma } from "@/lib/prisma";
 const todoSchema = z.object({
   title: z.string().trim().min(2, "Tên việc cần làm phải có ít nhất 2 ký tự."),
   description: z.string().trim().optional(),
+  assignedToId: z.string().trim().min(1, "Vui lòng chọn người phụ trách."),
+  workDate: z.string().trim().regex(/^\d{4}-\d{2}-\d{2}$/, "Vui lòng chọn ngày hợp lệ."),
 });
 
 export async function GET(
@@ -35,7 +37,7 @@ export async function GET(
 
   const todos = await prisma.workspaceTodo.findMany({
     where: { workspaceId },
-    orderBy: [{ done: "asc" }, { createdAt: "desc" }],
+    orderBy: [{ workDate: "desc" }, { updatedAt: "desc" }],
   });
 
   return NextResponse.json(todos);
@@ -71,9 +73,26 @@ export async function POST(
     );
   }
 
+  const assignee = await prisma.workspaceMember.findFirst({
+    where: {
+      workspaceId,
+      userId: parsed.data.assignedToId,
+      role: { not: "MANAGER" },
+    },
+  });
+
+  if (!assignee) {
+    return NextResponse.json(
+      { error: "HR được phân công không thuộc workspace này." },
+      { status: 400 },
+    );
+  }
+
   const todo = await prisma.workspaceTodo.create({
     data: {
       workspaceId,
+      assignedToId: parsed.data.assignedToId,
+      workDate: parsed.data.workDate,
       title: parsed.data.title,
       description: parsed.data.description || null,
     },

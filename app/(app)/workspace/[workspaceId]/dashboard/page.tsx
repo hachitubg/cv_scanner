@@ -109,7 +109,7 @@ export default async function WorkspaceDashboardPage({
     }),
     prisma.workspaceTodo.findMany({
       where: { workspaceId },
-      orderBy: [{ done: "asc" }, { createdAt: "desc" }],
+      orderBy: [{ workDate: "desc" }, { updatedAt: "desc" }],
     }),
   ]);
 
@@ -381,6 +381,10 @@ export default async function WorkspaceDashboardPage({
         <WorkspaceTodoCard
           workspaceId={workspaceId}
           initialTodos={initialTodos}
+          hrMembers={hrMembers.map((member) => ({
+            id: member.userId,
+            name: member.user.name,
+          }))}
           canManage={canManageTodos}
         />
       </section>

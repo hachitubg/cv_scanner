@@ -25,6 +25,7 @@ model User {
   uploadedFiles    CVFile[]          @relation("FileUploader")
   statusChanges    StatusHistory[]
   preferences      UserPreference[]
+  assignedTodos    WorkspaceTodo[]   @relation("WorkspaceTodoAssignee")
 }
 
 model UserPreference {
@@ -164,16 +165,22 @@ model WorkspaceDropdownOption {
 model WorkspaceTodo {
   id          String   @id @default(cuid())
   workspaceId String
+  assignedToId String?
+  workDate    String?
   title       String
   description String?
   done        Boolean  @default(false)
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
 
-  workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  workspace  Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  assignedTo User?     @relation("WorkspaceTodoAssignee", fields: [assignedToId], references: [id], onDelete: SetNull)
 
   @@index([workspaceId, done])
   @@index([workspaceId, createdAt])
+  @@index([workspaceId, updatedAt])
+  @@index([workspaceId, assignedToId])
+  @@index([workspaceId, workDate])
 }
 
 model StatusHistory {

@@ -46,7 +46,7 @@ export default async function CandidatesPage({
         project: true,
         managerReviewedBy: true,
       },
-      orderBy: { createdAt: "desc" },
+      orderBy: { updatedAt: "desc" },
     }),
     prisma.workspaceDropdownOption.findMany({
       where: { workspaceId, type: "NO_HIRE_REASON" },
@@ -112,6 +112,7 @@ export default async function CandidatesPage({
           notes: candidate.notes,
           status: candidate.status,
           createdAt: candidate.createdAt,
+          updatedAt: candidate.updatedAt,
           interviewDate: candidate.interviewDate,
           interviewerName: candidate.interviewerName,
           projectName: candidate.project?.name ?? null,
