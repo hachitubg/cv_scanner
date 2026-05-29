@@ -11,6 +11,7 @@ import { cn, toBirthYear } from "@/lib/utils";
 import type {
   ParsedCVResult,
   ProjectOption,
+  WorkspaceDropdownOption,
   WorkspaceMemberOption,
   WorkspaceRoleType,
 } from "@/types";
@@ -61,12 +62,14 @@ export function UploadCandidateForm({
   membershipRole,
   members,
   projects,
+  positionOptions,
 }: {
   workspaceId: string;
   currentUserId: string;
   membershipRole: WorkspaceRoleType;
   members: WorkspaceMemberOption[];
   projects: ProjectOption[];
+  positionOptions: WorkspaceDropdownOption[];
 }) {
   const router = useRouter();
   const assignableMembers = useMemo(() => {
@@ -129,6 +132,19 @@ export function UploadCandidateForm({
       geminiModels.find((item) => item.id === geminiModelDraft),
     [geminiModel, geminiModelDraft, geminiModels],
   );
+  const positionSelectOptions = useMemo(() => {
+    const trimmedPosition = form.position.trim();
+    const configuredPositions = positionOptions.map((option) => option.name);
+
+    if (
+      trimmedPosition &&
+      !configuredPositions.some((position) => position === trimmedPosition)
+    ) {
+      return [trimmedPosition, ...configuredPositions];
+    }
+
+    return configuredPositions;
+  }, [form.position, positionOptions]);
 
   function updateField(name: string, value: string) {
     setForm((current) => ({ ...current, [name]: value }));
@@ -509,10 +525,18 @@ export function UploadCandidateForm({
           <div className="mt-5 grid gap-5 md:grid-cols-2">
             <div>
               <label className="label">Vị trí ứng tuyển</label>
-              <Input
+              <select
+                className="field"
                 value={form.position}
                 onChange={(e) => updateField("position", e.target.value)}
-              />
+              >
+                <option value="">Chưa chọn vị trí</option>
+                {positionSelectOptions.map((position) => (
+                  <option key={position} value={position}>
+                    {position}
+                  </option>
+                ))}
+              </select>
             </div>
             <div>
               <label className="label">Nguồn</label>

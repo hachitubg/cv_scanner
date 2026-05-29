@@ -22,26 +22,19 @@ import {
 import {
   ArrowDown,
   ArrowUp,
-  BriefcaseBusiness,
-  CalendarDays,
   ChevronDown,
   ChevronRight,
   CheckCircle2,
   ClipboardCheck,
-  CircleUserRound,
   Eye,
   FilterX,
-  FolderSearch,
   GripVertical,
-  LayoutGrid,
   Maximize2,
   Minimize2,
   Pin,
   PinOff,
   Settings2,
-  Sparkles,
   Table2,
-  UserRoundSearch,
   X,
 } from "lucide-react";
 
@@ -54,6 +47,7 @@ import {
   type CandidateStatusType,
   type ManagerDecisionType,
   type ManagerFinalStatusType,
+  type WorkspaceDropdownOption,
   type WorkspaceRoleType,
 } from "@/types";
 import {
@@ -61,8 +55,10 @@ import {
   cn,
   formatDate,
   formatDateTime,
+  getCandidateStatusOptions,
   managerDecisionMeta,
   managerFinalStatusMeta,
+  normalizeCandidateStatus,
   toDateTimeLocalValue,
 } from "@/lib/utils";
 
@@ -87,6 +83,7 @@ type CandidateListItem = {
   managerReviewNote: string | null;
   managerReviewedAt: Date | string | null;
   managerReviewedByName: string | null;
+  noHireReason: string | null;
   hrId: string;
   hr: {
     name: string;
@@ -98,6 +95,7 @@ type StatusDraftState = {
   statusNote: string;
   interviewDate: string;
   interviewerName: string;
+  noHireReason: string;
 };
 
 type ReviewDraftState = {
@@ -111,8 +109,6 @@ type ModalState =
   | { candidateId: string; mode: "status" }
   | { candidateId: string; mode: "review" }
   | null;
-
-type ViewMode = "table" | "cards";
 
 type CandidateColumnId =
   | "candidate"
@@ -141,34 +137,21 @@ type TableSettingsStatus = "loading" | "idle" | "saving" | "saved" | "error";
 
 const CANDIDATE_TABLE_SETTINGS_KEY = "candidates-table-columns";
 
-const INTERVIEW_REQUIRED_STATUSES: CandidateStatusType[] = [
-  "INTERVIEW",
-  "INTERVIEWED",
-];
+const INTERVIEW_REQUIRED_STATUSES: CandidateStatusType[] = ["INTERVIEW"];
 
 const statusSurfaceMap: Record<CandidateStatusType, string> = {
   NEW: "bg-[linear-gradient(145deg,rgba(255,231,237,0.72),rgba(255,255,255,0.97))] border-primary/15",
-  REVIEWING:
-    "bg-[linear-gradient(145deg,rgba(170,237,255,0.36),rgba(255,255,255,0.97))] border-secondary/15",
-  PASS_CV:
-    "bg-[linear-gradient(145deg,rgba(171,239,231,0.44),rgba(255,255,255,0.97))] border-tertiary/20",
-  FAIL_CV:
-    "bg-[linear-gradient(145deg,rgba(255,231,237,0.58),rgba(255,255,255,0.97))] border-rose-200/70",
   INTERVIEW:
     "bg-[linear-gradient(145deg,rgba(170,237,255,0.46),rgba(255,255,255,0.97))] border-secondary/20",
-  INTERVIEWED:
-    "bg-[linear-gradient(145deg,rgba(241,237,238,0.88),rgba(255,255,255,0.97))] border-outline-variant/80",
-  PASSED:
-    "bg-[linear-gradient(145deg,rgba(171,239,231,0.5),rgba(255,255,255,0.97))] border-tertiary/25",
-  INTERVIEW_FAILED:
-    "bg-[linear-gradient(145deg,rgba(255,242,230,0.78),rgba(255,255,255,0.97))] border-orange-200/80",
-  OFFERED:
+  OFFER:
     "bg-[linear-gradient(145deg,rgba(255,217,227,0.82),rgba(255,255,255,0.96)_52%,rgba(170,237,255,0.24))] border-primary/20",
-  OFFER_DECLINED:
-    "bg-[linear-gradient(145deg,rgba(255,245,216,0.82),rgba(255,255,255,0.97))] border-amber-200/80",
+  HIRE:
+    "bg-[linear-gradient(145deg,rgba(171,239,231,0.5),rgba(255,255,255,0.97))] border-tertiary/25",
   ONBOARDED:
     "bg-[linear-gradient(145deg,rgba(171,239,231,0.58),rgba(255,255,255,0.98))] border-emerald-200/80",
-  REJECTED:
+  PERMANENT:
+    "bg-[linear-gradient(145deg,rgba(205,250,230,0.72),rgba(255,255,255,0.98))] border-emerald-300/80",
+  NO_HIRE:
     "bg-[linear-gradient(145deg,rgba(255,231,237,0.68),rgba(255,255,255,0.97))] border-rose-200/80",
 };
 
@@ -337,7 +320,13 @@ function canEditCandidate(
 }
 
 function canReviewCandidate(membershipRole: WorkspaceRoleType) {
-  return membershipRole === "MANAGER" || membershipRole === "HR_ADMIN";
+  return membershipRole === "MANAGER";
+}
+
+function getNextHrStatuses(status: string) {
+  return getCandidateStatusOptions(status, "hr").filter(
+    (option) => option !== normalizeCandidateStatus(status),
+  );
 }
 
 function shortenText(value: string | null | undefined, maxLength = 120) {
@@ -361,11 +350,13 @@ export function CandidatesListManager({
   currentUserId,
   membershipRole,
   candidates,
+  noHireReasonOptions,
 }: {
   workspaceId: string;
   currentUserId: string;
   membershipRole: WorkspaceRoleType;
   candidates: CandidateListItem[];
+  noHireReasonOptions: WorkspaceDropdownOption[];
 }) {
   const router = useRouter();
   const [items, setItems] = useState(candidates);
@@ -376,10 +367,11 @@ export function CandidatesListManager({
       candidates.map((candidate) => [
         candidate.id,
         {
-          status: candidate.status as CandidateStatusType,
+          status: normalizeCandidateStatus(candidate.status),
           statusNote: "",
           interviewDate: toDateTimeLocalValue(candidate.interviewDate),
           interviewerName: candidate.interviewerName ?? "",
+          noHireReason: candidate.noHireReason ?? "",
         },
       ]),
     ),
@@ -395,7 +387,8 @@ export function CandidatesListManager({
             (candidate.managerDecision as ManagerDecisionType) || "PENDING",
           managerOfferSalary: candidate.managerOfferSalary ?? "",
           managerReviewNote: candidate.managerReviewNote ?? "",
-          finalStatus: "",
+          finalStatus:
+            normalizeCandidateStatus(candidate.status) === "OFFER" ? "HIRE" : "",
         },
       ]),
     ),
@@ -405,24 +398,17 @@ export function CandidatesListManager({
   >({});
   const [pendingId, setPendingId] = useState<string | null>(null);
   const [activeModal, setActiveModal] = useState<ModalState>(null);
-  const [viewMode, setViewMode] = useState<ViewMode>("table");
   const [isPending, startTransition] = useTransition();
 
   const stats = useMemo(() => {
     const total = items.length;
     const pipeline = items.filter((candidate) =>
-      [
-        "NEW",
-        "REVIEWING",
-        "PASS_CV",
-        "INTERVIEW",
-        "INTERVIEWED",
-        "PASSED",
-        "OFFERED",
-      ].includes(candidate.status),
+      ["NEW", "INTERVIEW", "OFFER", "HIRE", "ONBOARDED"].includes(
+        normalizeCandidateStatus(candidate.status),
+      ),
     ).length;
-    const interviewing = items.filter((candidate) =>
-      ["INTERVIEW", "INTERVIEWED"].includes(candidate.status),
+    const interviewing = items.filter(
+      (candidate) => normalizeCandidateStatus(candidate.status) === "INTERVIEW",
     ).length;
     const approved = items.filter(
       (candidate) => candidate.managerDecision === "APPROVED",
@@ -486,6 +472,16 @@ export function CandidatesListManager({
       }));
       return;
     }
+    if (draft.status === "NO_HIRE" && !draft.noHireReason.trim()) {
+      setMessages((current) => ({
+        ...current,
+        [candidateId]: {
+          text: "Cần chọn lý do không tuyển trước khi lưu.",
+          tone: "error",
+        },
+      }));
+      return;
+    }
 
     setPendingId(candidateId);
     startTransition(async () => {
@@ -502,6 +498,8 @@ export function CandidatesListManager({
             ? new Date(draft.interviewDate).toISOString()
             : "",
           interviewerName: draft.interviewerName.trim(),
+          noHireReason:
+            draft.status === "NO_HIRE" ? draft.noHireReason.trim() : "",
         }),
       });
 
@@ -529,6 +527,10 @@ export function CandidatesListManager({
                   ? new Date(draft.interviewDate).toISOString()
                   : null,
                 interviewerName: draft.interviewerName.trim() || null,
+                noHireReason:
+                  draft.status === "NO_HIRE"
+                    ? draft.noHireReason.trim()
+                    : null,
               }
             : item,
         ),
@@ -559,13 +561,10 @@ export function CandidatesListManager({
           "Content-Type": "application/json",
         },
         body: JSON.stringify({
-          managerDecision: draft.managerDecision,
-          managerOfferSalary: draft.managerOfferSalary.trim(),
+          managerDecision: "APPROVED",
           managerReviewNote: draft.managerReviewNote.trim(),
-          status: draft.finalStatus || undefined,
-          statusNote: draft.finalStatus
-            ? "Quản lý chốt nhanh từ danh sách ứng viên"
-            : undefined,
+          status: "HIRE",
+          statusNote: "Sếp chốt tuyển từ danh sách ứng viên",
         }),
       });
 
@@ -587,12 +586,11 @@ export function CandidatesListManager({
           item.id === candidateId
             ? {
                 ...item,
-                managerDecision: draft.managerDecision,
-                managerOfferSalary: draft.managerOfferSalary.trim() || null,
+                managerDecision: "APPROVED",
                 managerReviewNote: draft.managerReviewNote.trim() || null,
                 managerReviewedAt: new Date().toISOString(),
                 managerReviewedByName: "Bạn",
-                status: draft.finalStatus || item.status,
+                status: "HIRE",
               }
             : item,
         ),
@@ -602,7 +600,7 @@ export function CandidatesListManager({
         ...current,
         [candidateId]: {
           ...current[candidateId],
-          finalStatus: "",
+          finalStatus: "HIRE",
         },
       }));
 
@@ -626,11 +624,11 @@ export function CandidatesListManager({
           Danh sách rỗng
         </p>
         <h3 className="mt-3 text-2xl font-black text-on-surface">
-          Chưa có ứng viên phù hợp bộ lọc
+          Chưa có ứng viên trong kho CV
         </h3>
         <p className="mt-3 text-sm font-medium leading-7 text-on-surface-variant">
-          Hãy thử đổi từ khóa tìm kiếm, trạng thái, HR phụ trách hoặc dự án để
-          xem thêm kết quả.
+          Hãy upload CV mới để bắt đầu quản lý danh sách ứng viên bằng bảng
+          Excel.
         </p>
       </div>
     );
@@ -646,76 +644,19 @@ export function CandidatesListManager({
           <MetricCard label="Đã duyệt" value={stats.approved} tone="tertiary" />
         </div>
 
-        <div className="flex flex-col gap-3 rounded-[1.6rem] border border-white/70 bg-white/82 p-4 shadow-[0_18px_45px_rgba(160,57,100,0.08)] backdrop-blur-xl md:flex-row md:items-center md:justify-between">
-          <div>
-            <p className="text-sm font-black text-on-surface">
-              Chế độ hiển thị
-            </p>
-            <p className="mt-1 text-sm font-medium leading-6 text-on-surface-variant">
-              Bảng Excel dùng cho thao tác nhanh; dạng thẻ dùng để đọc hồ sơ
-              trực quan.
-            </p>
-          </div>
-
-          <div className="inline-flex rounded-[1.1rem] bg-surface-container-low p-1">
-            <button
-              type="button"
-              onClick={() => setViewMode("table")}
-              className={cn(
-                "inline-flex h-10 items-center gap-2 rounded-[0.9rem] px-4 text-sm font-black transition",
-                viewMode === "table"
-                  ? "bg-white text-primary shadow-[0_10px_24px_rgba(160,57,100,0.12)]"
-                  : "text-on-surface-variant hover:bg-white/60",
-              )}
-            >
-              <Table2 className="size-4" />
-              Bảng Excel
-            </button>
-            <button
-              type="button"
-              onClick={() => setViewMode("cards")}
-              className={cn(
-                "inline-flex h-10 items-center gap-2 rounded-[0.9rem] px-4 text-sm font-black transition",
-                viewMode === "cards"
-                  ? "bg-white text-primary shadow-[0_10px_24px_rgba(160,57,100,0.12)]"
-                  : "text-on-surface-variant hover:bg-white/60",
-              )}
-            >
-              <LayoutGrid className="size-4" />
-              Dạng thẻ
-            </button>
-          </div>
-        </div>
-
-        {viewMode === "table" ? (
-          <CandidatesTable
-            workspaceId={workspaceId}
-            candidates={items}
-            currentUserId={currentUserId}
-            membershipRole={membershipRole}
-            messages={messages}
-            onEditStatus={(candidateId) =>
-              setActiveModal({ candidateId, mode: "status" })
-            }
-            onReview={(candidateId) =>
-              setActiveModal({ candidateId, mode: "review" })
-            }
-          />
-        ) : (
-          <CandidatesCardView
-            workspaceId={workspaceId}
-            candidates={items}
-            currentUserId={currentUserId}
-            membershipRole={membershipRole}
-            messages={messages}
-            onEditStatus={(candidateId) =>
-              setActiveModal({ candidateId, mode: "status" })
-            }
-            onReview={(candidateId) =>
-              setActiveModal({ candidateId, mode: "review" })
-            }
-          />
-        )}
+        <CandidatesTable
+          workspaceId={workspaceId}
+          candidates={items}
+          currentUserId={currentUserId}
+          membershipRole={membershipRole}
+          messages={messages}
+          onEditStatus={(candidateId) =>
+            setActiveModal({ candidateId, mode: "status" })
+          }
+          onReview={(candidateId) =>
+            setActiveModal({ candidateId, mode: "review" })
+          }
+        />
       </section>
 
       {activeModal && activeCandidate ? (
@@ -736,6 +677,11 @@ export function CandidatesListManager({
           {activeModal.mode === "status" ? (
             <StatusEditForm
               draft={statusDrafts[activeCandidate.id]}
+              statusOptions={getCandidateStatusOptions(
+                activeCandidate.status,
+                "hr",
+              )}
+              noHireReasonOptions={noHireReasonOptions}
               isSaving={Boolean(isPending && pendingId === activeCandidate.id)}
               onChange={(patch) => updateStatusDraft(activeCandidate.id, patch)}
               onSave={() => saveStatus(activeCandidate.id)}
@@ -940,7 +886,7 @@ function CandidatesTable({
     const hiddenStatusSet = new Set(hiddenStatuses);
     return candidates.filter(
       (candidate) =>
-        !hiddenStatusSet.has(candidate.status as CandidateStatusType),
+        !hiddenStatusSet.has(normalizeCandidateStatus(candidate.status)),
     );
   }, [candidates, hiddenStatuses]);
 
@@ -980,7 +926,7 @@ function CandidatesTable({
     CANDIDATE_STATUSES.forEach((status) => groups.set(status, []));
 
     tableRows.forEach((row) => {
-      const status = row.original.status as CandidateStatusType;
+      const status = normalizeCandidateStatus(row.original.status);
       groups.get(status)?.push(row);
     });
 
@@ -1093,7 +1039,7 @@ function CandidatesTable({
   }, [isTableFullscreen]);
 
   function renderCandidateTableRow(row: Row<CandidateListItem>) {
-    const status = row.original.status as CandidateStatusType;
+    const status = normalizeCandidateStatus(row.original.status);
 
     return (
       <tr
@@ -1491,21 +1437,28 @@ function buildCandidateColumns({
     },
     {
       id: "status",
-      accessorFn: (candidate) => candidate.status,
+      accessorFn: (candidate) => normalizeCandidateStatus(candidate.status),
       header: candidateColumnLabels.status,
       size: 180,
       cell: ({ row }) => {
-        const status = row.original.status as CandidateStatusType;
+        const status = normalizeCandidateStatus(row.original.status);
         const statusMeta = candidateStatusMeta[status];
         return (
-          <Badge
-            className={cn(
-              statusMeta.className,
-              "whitespace-nowrap px-2 py-0.5 text-[10px] leading-4 tracking-[0.08em]",
-            )}
-          >
-            {statusMeta.label}
-          </Badge>
+          <div className="space-y-1">
+            <Badge
+              className={cn(
+                statusMeta.className,
+                "whitespace-nowrap px-2 py-0.5 text-[10px] leading-4 tracking-[0.08em]",
+              )}
+            >
+              {statusMeta.label}
+            </Badge>
+            {status === "NO_HIRE" && row.original.noHireReason ? (
+              <p className="text-xs font-semibold text-rose-700">
+                {row.original.noHireReason}
+              </p>
+            ) : null}
+          </div>
         );
       },
     },
@@ -1623,12 +1576,14 @@ function buildCandidateColumns({
           membershipRole,
         );
         const reviewable = canReviewCandidate(membershipRole);
+        const status = normalizeCandidateStatus(candidate.status);
+        const editableStatus = Boolean(getNextHrStatuses(status).length);
         const message = messages[candidate.id];
 
         return (
           <div className="space-y-2">
             <div className="flex flex-wrap justify-end gap-2">
-              {editable ? (
+              {editable && editableStatus ? (
                 <Button
                   variant="secondary"
                   className="h-9 gap-1.5 rounded-[0.85rem] px-3 text-xs"
@@ -1638,7 +1593,7 @@ function buildCandidateColumns({
                   Trạng thái
                 </Button>
               ) : null}
-              {reviewable ? (
+              {reviewable && status === "OFFER" ? (
                 <Button
                   className="h-9 gap-1.5 rounded-[0.85rem] px-3 text-xs"
                   onClick={() => onReview(candidate.id)}
@@ -2008,252 +1963,6 @@ function IconButton({
   );
 }
 
-function CandidatesCardView({
-  workspaceId,
-  candidates,
-  currentUserId,
-  membershipRole,
-  messages,
-  onEditStatus,
-  onReview,
-}: {
-  workspaceId: string;
-  candidates: CandidateListItem[];
-  currentUserId: string;
-  membershipRole: WorkspaceRoleType;
-  messages: Record<
-    string,
-    { text: string; tone: "success" | "error" | "muted" }
-  >;
-  onEditStatus: (candidateId: string) => void;
-  onReview: (candidateId: string) => void;
-}) {
-  return (
-    <div className="space-y-4">
-      {candidates.map((candidate) => {
-        const status = candidate.status as CandidateStatusType;
-        const meta = candidateStatusMeta[status];
-        const reviewMeta =
-          managerDecisionMeta[
-            (candidate.managerDecision as ManagerDecisionType) || "PENDING"
-          ];
-        const message = messages[candidate.id];
-        const editable = canEditCandidate(
-          candidate,
-          currentUserId,
-          membershipRole,
-        );
-        const reviewable = canReviewCandidate(membershipRole);
-        const cvInfo = getCandidateCvInfo(candidate);
-
-        return (
-          <article
-            key={candidate.id}
-            className={cn(
-              "overflow-hidden rounded-[2rem] border p-0 shadow-[0_22px_60px_rgba(160,57,100,0.08)]",
-              statusSurfaceMap[status],
-            )}
-          >
-            <div className="space-y-5 p-5 lg:p-6">
-              <div className="flex flex-wrap items-start justify-between gap-4">
-                <div className="max-w-3xl">
-                  <p className="text-xs font-black uppercase tracking-[0.18em] text-primary">
-                    {meta.label}
-                  </p>
-                  <h3 className="mt-2 text-2xl font-black tracking-tight text-on-surface">
-                    {candidate.fullName || "Chưa có tên ứng viên"}
-                  </h3>
-                  <p className="mt-2 text-base font-semibold leading-7 text-on-surface-variant">
-                    {candidate.position || "Chưa có vị trí ứng tuyển"}
-                  </p>
-                </div>
-                <div className="flex flex-wrap items-center gap-2">
-                  <Badge className={meta.className}>{meta.label}</Badge>
-                  <Badge className={reviewMeta.className}>
-                    {reviewMeta.label}
-                  </Badge>
-                </div>
-              </div>
-
-              <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-5">
-                <InfoCard icon={CircleUserRound} label="HR phụ trách" value={candidate.hr.name} />
-                <InfoCard icon={FolderSearch} label="Nguồn" value={candidate.source || "Chưa rõ"} />
-                <InfoCard icon={CalendarDays} label="Ngày nhận" value={formatDate(candidate.createdAt)} />
-                <InfoCard icon={UserRoundSearch} label="Người phỏng vấn" value={candidate.interviewerName || "Chưa có lịch"} />
-                <InfoCard icon={BriefcaseBusiness} label="Dự án" value={candidate.projectName || "Chưa gắn dự án"} />
-              </div>
-
-              <div className="grid gap-3 lg:grid-cols-[minmax(0,1fr)_minmax(280px,0.9fr)]">
-                <div className="grid gap-3 xl:grid-cols-3">
-                  <div className="rounded-[1.6rem] border border-white/70 bg-white/80 p-4 shadow-[0_12px_28px_rgba(15,23,42,0.06)]">
-                    <p className="text-sm font-black text-on-surface">
-                      Thông tin CV
-                    </p>
-                    <div className="mt-3 grid gap-3">
-                      <MiniInfo
-                        label="Lương mong muốn"
-                        value={candidate.expectedSalary || "Chưa nhập"}
-                      />
-                      <MiniInfo
-                        label="Ghi chú / tóm tắt"
-                        value={
-                          shortenText(cvInfo, 120) ||
-                          "Chưa có thông tin thêm"
-                        }
-                      />
-                    </div>
-                  </div>
-
-                  <div className="rounded-[1.6rem] border border-white/70 bg-white/80 p-4 shadow-[0_12px_28px_rgba(15,23,42,0.06)]">
-                    <div className="flex items-center gap-3">
-                      <Sparkles className="size-4 text-primary" />
-                      <p className="text-sm font-black text-on-surface">
-                        Thông tin phỏng vấn
-                      </p>
-                    </div>
-                    <div className="mt-3 grid gap-3">
-                      <MiniInfo
-                        label="Lịch phỏng vấn"
-                        value={
-                          candidate.interviewDate
-                            ? formatDateTime(candidate.interviewDate)
-                            : "Chưa lên lịch"
-                        }
-                      />
-                      <MiniInfo
-                        label="Trạng thái quản lý"
-                        value={reviewMeta.label}
-                      />
-                    </div>
-                  </div>
-
-                  <div className="rounded-[1.6rem] border border-white/70 bg-white/80 p-4 shadow-[0_12px_28px_rgba(15,23,42,0.06)]">
-                    <div className="flex items-center justify-between gap-3">
-                      <p className="text-sm font-black text-on-surface">
-                        Đánh giá quản lý
-                      </p>
-                      <Badge className={reviewMeta.className}>
-                        {reviewMeta.shortLabel}
-                      </Badge>
-                    </div>
-                    <div className="mt-3 grid gap-3">
-                      <MiniInfo
-                        label="Offer đề xuất"
-                        value={candidate.managerOfferSalary || "Chưa đề xuất"}
-                      />
-                      <MiniInfo
-                        label="Người duyệt"
-                        value={
-                          candidate.managerReviewedByName
-                            ? `${candidate.managerReviewedByName}${candidate.managerReviewedAt ? ` • ${formatDateTime(candidate.managerReviewedAt)}` : ""}`
-                            : "Chưa có đánh giá"
-                        }
-                      />
-                    </div>
-                    <p className="mt-3 text-sm font-medium leading-7 text-on-surface-variant">
-                      {shortenText(candidate.managerReviewNote, 110) ||
-                        "Chưa có ghi chú đánh giá."}
-                    </p>
-                  </div>
-                </div>
-
-                <div className="rounded-[1.6rem] border border-white/70 bg-white/80 p-4 shadow-[0_12px_28px_rgba(15,23,42,0.06)]">
-                  <p className="text-xs font-black uppercase tracking-[0.18em] text-primary">
-                    Thao tác nhanh
-                  </p>
-                  <p className="mt-2 text-sm font-medium leading-6 text-on-surface-variant">
-                    Chỉnh nhanh bằng popup hoặc mở hồ sơ để xem chi tiết.
-                  </p>
-
-                  <div className="mt-4 flex flex-wrap gap-3">
-                    {editable ? (
-                      <Button
-                        variant="secondary"
-                        onClick={() => onEditStatus(candidate.id)}
-                      >
-                        Chỉnh trạng thái
-                      </Button>
-                    ) : null}
-
-                    {reviewable ? (
-                      <Button onClick={() => onReview(candidate.id)}>
-                        Đánh giá quản lý
-                      </Button>
-                    ) : null}
-
-                    <Link href={`/workspace/${workspaceId}/candidates/${candidate.id}`}>
-                      <Button
-                        variant="ghost"
-                        className="border-primary/15 bg-surface-container-low/90 shadow-[0_10px_26px_rgba(160,57,100,0.08)] hover:bg-primary-container/70"
-                      >
-                        Xem chi tiết
-                      </Button>
-                    </Link>
-                  </div>
-
-                  {!editable && !reviewable ? (
-                    <p className="mt-4 text-sm font-semibold leading-7 text-on-surface-variant">
-                      HR này không phụ trách hồ sơ này nên chỉ có quyền xem.
-                    </p>
-                  ) : null}
-
-                  {message?.text ? (
-                    <p
-                      className={cn(
-                        "mt-4 text-sm font-semibold",
-                        message.tone === "success" && "text-emerald-600",
-                        message.tone === "error" && "text-rose-600",
-                        message.tone === "muted" && "text-on-surface-variant",
-                      )}
-                    >
-                      {message.text}
-                    </p>
-                  ) : null}
-                </div>
-              </div>
-            </div>
-          </article>
-        );
-      })}
-    </div>
-  );
-}
-
-function InfoCard({
-  icon: Icon,
-  label,
-  value,
-}: {
-  icon: typeof CircleUserRound;
-  label: string;
-  value: string;
-}) {
-  return (
-    <div className="rounded-[1.5rem] border border-white/70 bg-white/88 px-4 py-4 shadow-[0_12px_28px_rgba(15,23,42,0.06)] backdrop-blur-sm">
-      <div className="flex items-center gap-2 text-slate-600">
-        <Icon className="size-4" />
-        <p className="text-[11px] font-black uppercase tracking-[0.16em]">
-          {label}
-        </p>
-      </div>
-      <p className="mt-3 text-sm font-black text-on-surface">{value}</p>
-    </div>
-  );
-}
-
-function MiniInfo({ label, value }: { label: string; value: string }) {
-  return (
-    <div className="rounded-[1.2rem] border border-white/85 bg-white/96 p-3">
-      <p className="text-[11px] font-black uppercase tracking-[0.16em] leading-5 text-slate-600">
-        {label}
-      </p>
-      <p className="mt-1.5 text-sm font-semibold leading-6 text-on-surface">
-        {value}
-      </p>
-    </div>
-  );
-}
-
 function QuickEditModal({
   title,
   description,
@@ -2299,11 +2008,15 @@ function QuickEditModal({
 
 function StatusEditForm({
   draft,
+  statusOptions,
+  noHireReasonOptions,
   isSaving,
   onChange,
   onSave,
 }: {
   draft: StatusDraftState;
+  statusOptions: CandidateStatusType[];
+  noHireReasonOptions: WorkspaceDropdownOption[];
   isSaving: boolean;
   onChange: (patch: Partial<StatusDraftState>) => void;
   onSave: () => void;
@@ -2320,7 +2033,7 @@ function StatusEditForm({
         }
         disabled={isSaving}
       >
-        {CANDIDATE_STATUSES.map((statusOption) => (
+        {statusOptions.map((statusOption) => (
           <option key={statusOption} value={statusOption}>
             {candidateStatusMeta[statusOption].label}
           </option>
@@ -2353,6 +2066,27 @@ function StatusEditForm({
             disabled={isSaving}
           />
         </div>
+      ) : null}
+
+      {draft.status === "NO_HIRE" ? (
+        <select
+          className="field bg-surface-container-low"
+          value={draft.noHireReason}
+          onChange={(event) =>
+            onChange({
+              noHireReason: event.target.value,
+            })
+          }
+          disabled={isSaving}
+          required
+        >
+          <option value="">Chọn lý do không tuyển</option>
+          {noHireReasonOptions.map((reason) => (
+            <option key={reason.id} value={reason.name}>
+              {reason.name}
+            </option>
+          ))}
+        </select>
       ) : null}
 
       <textarea
@@ -2390,40 +2124,10 @@ function ReviewEditForm({
 }) {
   return (
     <div className="space-y-4">
-      <select
-        className="field bg-surface-container-low"
-        value={draft.managerDecision}
-        onChange={(event) =>
-          onChange({
-            managerDecision: event.target.value as ManagerDecisionType,
-          })
-        }
-        disabled={isSaving}
-      >
-        {MANAGER_DECISIONS.map((decision) => (
-          <option key={decision} value={decision}>
-            {managerDecisionMeta[decision].label}
-          </option>
-        ))}
-      </select>
-
-      <input
-        type="text"
-        className="field bg-surface-container-low"
-        placeholder="Offer đề xuất"
-        value={draft.managerOfferSalary}
-        onChange={(event) =>
-          onChange({
-            managerOfferSalary: event.target.value,
-          })
-        }
-        disabled={isSaving}
-      />
-
       <textarea
         rows={5}
         className="field-textarea min-h-32 resize-none bg-surface-container-low"
-        placeholder="Nhận xét của quản lý"
+        placeholder="Ghi chú của sếp (không bắt buộc)"
         value={draft.managerReviewNote}
         onChange={(event) =>
           onChange({
@@ -2433,27 +2137,13 @@ function ReviewEditForm({
         disabled={isSaving}
       />
 
-      <select
-        className="field bg-surface-container-low"
-        value={draft.finalStatus}
-        onChange={(event) =>
-          onChange({
-            finalStatus: event.target.value as ManagerFinalStatusType | "",
-          })
-        }
-        disabled={isSaving}
-      >
-        <option value="">Không đổi trạng thái</option>
-        {MANAGER_FINAL_STATUSES.map((statusOption) => (
-          <option key={statusOption} value={statusOption}>
-            {managerFinalStatusMeta[statusOption].label}
-          </option>
-        ))}
-      </select>
+      <p className="rounded-[1.1rem] bg-surface-container-low px-4 py-3 text-sm font-semibold text-on-surface-variant">
+        Khi lưu, hồ sơ sẽ chuyển sang trạng thái Đã tuyển.
+      </p>
 
       <div className="flex flex-wrap gap-3">
         <Button onClick={onSave} disabled={isSaving}>
-          {isSaving ? "Đang lưu..." : "Lưu đánh giá"}
+          {isSaving ? "Đang lưu..." : "Chuyển sang Đã tuyển"}
         </Button>
       </div>
     </div>

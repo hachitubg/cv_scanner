@@ -57,62 +57,96 @@ export const candidateStatusMeta: Record<
     shortLabel: "Mới",
     className: "bg-primary-fixed text-on-primary-container",
   },
-  REVIEWING: {
-    label: "Đang review",
-    shortLabel: "Review",
-    className: "bg-secondary-container text-on-secondary-container",
-  },
-  PASS_CV: {
-    label: "Pass CV",
-    shortLabel: "Pass CV",
-    className: "bg-emerald-100 text-emerald-700",
-  },
-  FAIL_CV: {
-    label: "Fail CV",
-    shortLabel: "Fail CV",
-    className: "bg-rose-100 text-rose-700",
-  },
   INTERVIEW: {
     label: "Mời phỏng vấn",
     shortLabel: "Phỏng vấn",
     className: "bg-secondary-fixed text-on-secondary-container",
   },
-  INTERVIEWED: {
-    label: "Đã phỏng vấn",
-    shortLabel: "Đã PV",
-    className: "bg-surface-container-high text-on-surface",
-  },
-  PASSED: {
-    label: "Pass phỏng vấn",
-    shortLabel: "Pass PV",
-    className: "bg-tertiary-container text-on-tertiary-container",
-  },
-  INTERVIEW_FAILED: {
-    label: "Phỏng vấn fail",
-    shortLabel: "Fail PV",
-    className: "bg-orange-100 text-orange-700",
-  },
-  OFFERED: {
-    label: "Đã offer",
+  OFFER: {
+    label: "Đã Offer",
     shortLabel: "Offer",
     className: "bg-primary text-white",
   },
-  OFFER_DECLINED: {
-    label: "Từ chối offer",
-    shortLabel: "Declined",
-    className: "bg-amber-100 text-amber-800",
+  HIRE: {
+    label: "Đã tuyển",
+    shortLabel: "Tuyển",
+    className: "bg-tertiary-container text-on-tertiary-container",
   },
   ONBOARDED: {
-    label: "Đã onboard",
-    shortLabel: "Onboard",
+    label: "Nhận việc",
+    shortLabel: "Nhận việc",
     className: "bg-emerald-100 text-emerald-800",
   },
-  REJECTED: {
-    label: "Từ chối",
-    shortLabel: "Reject",
+  PERMANENT: {
+    label: "Chính thức",
+    shortLabel: "Chính thức",
+    className: "bg-emerald-200 text-emerald-900",
+  },
+  NO_HIRE: {
+    label: "Không tuyển",
+    shortLabel: "Không tuyển",
     className: "bg-rose-100 text-rose-700",
   },
 };
+
+export const candidateStatusTransitions: Record<
+  CandidateStatusType,
+  CandidateStatusType[]
+> = {
+  NEW: ["INTERVIEW", "NO_HIRE"],
+  INTERVIEW: ["OFFER", "NO_HIRE"],
+  OFFER: [],
+  HIRE: ["ONBOARDED", "NO_HIRE"],
+  ONBOARDED: ["PERMANENT", "NO_HIRE"],
+  PERMANENT: [],
+  NO_HIRE: [],
+};
+
+export function getCandidateStatusOptions(
+  currentStatus: string,
+  actor: "hr" | "manager",
+) {
+  const normalizedStatus = normalizeCandidateStatus(currentStatus);
+  const nextStatuses =
+    actor === "manager"
+      ? normalizedStatus === "OFFER"
+        ? ["HIRE" as const]
+        : []
+      : candidateStatusTransitions[normalizedStatus];
+
+  return [normalizedStatus, ...nextStatuses].filter(
+    (status, index, statuses) => statuses.indexOf(status) === index,
+  );
+}
+
+export function normalizeCandidateStatus(value?: string | null): CandidateStatusType {
+  switch (value) {
+    case "INTERVIEW":
+    case "INTERVIEWED":
+      return "INTERVIEW";
+    case "OFFER":
+    case "OFFERED":
+    case "PASSED":
+      return "OFFER";
+    case "HIRE":
+      return "HIRE";
+    case "ONBOARDED":
+      return "ONBOARDED";
+    case "PERMANENT":
+      return "PERMANENT";
+    case "NO_HIRE":
+    case "FAIL_CV":
+    case "INTERVIEW_FAILED":
+    case "OFFER_DECLINED":
+    case "REJECTED":
+      return "NO_HIRE";
+    case "NEW":
+    case "REVIEWING":
+    case "PASS_CV":
+    default:
+      return "NEW";
+  }
+}
 
 export const workspaceRoleMeta: Record<WorkspaceRoleType, string> = {
   HR_ADMIN: "HR Admin",
@@ -125,8 +159,8 @@ export const managerDecisionMeta: Record<
   { label: string; className: string; shortLabel: string }
 > = {
   PENDING: {
-    label: "Chưa duyệt",
-    shortLabel: "Chưa duyệt",
+    label: "Chờ duyệt",
+    shortLabel: "Chờ duyệt",
     className: "bg-surface-container-high text-on-surface",
   },
   APPROVED: {
@@ -136,7 +170,7 @@ export const managerDecisionMeta: Record<
   },
   REJECTED: {
     label: "Không duyệt",
-    shortLabel: "Từ chối",
+    shortLabel: "Không duyệt",
     className: "bg-rose-100 text-rose-700",
   },
 };
@@ -145,21 +179,9 @@ export const managerFinalStatusMeta: Record<
   ManagerFinalStatusType,
   { label: string; className: string }
 > = {
-  OFFERED: {
-    label: "Chốt offer",
+  HIRE: {
+    label: "Đã tuyển",
     className: "bg-primary text-white",
-  },
-  OFFER_DECLINED: {
-    label: "Từ chối offer",
-    className: "bg-amber-100 text-amber-800",
-  },
-  ONBOARDED: {
-    label: "Nhận việc",
-    className: "bg-emerald-100 text-emerald-800",
-  },
-  REJECTED: {
-    label: "Không nhận",
-    className: "bg-rose-100 text-rose-700",
   },
 };
 

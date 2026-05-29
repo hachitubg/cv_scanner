@@ -2,10 +2,7 @@ import { prisma } from "@/lib/prisma";
 import type { CandidateStatusType, RoleType, WorkspaceRoleType } from "@/types";
 
 export const MANAGER_ALLOWED_FINAL_STATUSES: CandidateStatusType[] = [
-  "OFFERED",
-  "OFFER_DECLINED",
-  "ONBOARDED",
-  "REJECTED",
+  "HIRE",
 ];
 
 export function isManagerMembership(role?: WorkspaceRoleType) {

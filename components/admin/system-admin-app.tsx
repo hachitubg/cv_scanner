@@ -146,17 +146,12 @@ const roleChoices = [
 
 const candidateStatusChoices = [
   "NEW",
-  "REVIEWING",
-  "PASS_CV",
-  "FAIL_CV",
   "INTERVIEW",
-  "INTERVIEWED",
-  "PASSED",
-  "INTERVIEW_FAILED",
-  "OFFERED",
-  "OFFER_DECLINED",
+  "OFFER",
+  "HIRE",
   "ONBOARDED",
-  "REJECTED",
+  "PERMANENT",
+  "NO_HIRE",
 ].map((item) => ({ id: item, name: item }));
 
 const managerDecisionChoices = [

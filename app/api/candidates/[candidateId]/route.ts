@@ -12,8 +12,17 @@ import {
   requireWorkspaceHrAdmin,
 } from "@/lib/permissions";
 import { prisma } from "@/lib/prisma";
-import { stringifySkills, toBirthYear } from "@/lib/utils";
-import { CANDIDATE_STATUSES, MANAGER_DECISIONS } from "@/types";
+import {
+  normalizeCandidateStatus,
+  candidateStatusTransitions,
+  stringifySkills,
+  toBirthYear,
+} from "@/lib/utils";
+import {
+  CANDIDATE_STATUSES,
+  MANAGER_DECISIONS,
+  type CandidateStatusType,
+} from "@/types";
 
 const candidateUpdateSchema = z.object({
   fullName: z.string().optional(),
@@ -38,6 +47,7 @@ const candidateUpdateSchema = z.object({
   hrId: z.string().optional(),
   projectId: z.string().nullable().optional(),
   status: z.enum(CANDIDATE_STATUSES).optional(),
+  noHireReason: z.string().optional(),
   statusNote: z.string().optional(),
   managerDecision: z
     .union([z.enum(MANAGER_DECISIONS), z.literal("")])
@@ -48,14 +58,35 @@ const candidateUpdateSchema = z.object({
 
 const managerEditableKeys = new Set([
   "managerDecision",
-  "managerOfferSalary",
   "managerReviewNote",
   "status",
   "statusNote",
 ]);
 
 function requiresInterviewDetails(status: string) {
-  return status === "INTERVIEW" || status === "INTERVIEWED";
+  return status === "INTERVIEW";
+}
+
+function canTransitionStatus({
+  currentStatus,
+  nextStatus,
+  isManagerSession,
+  membershipRole,
+  role,
+}: {
+  currentStatus: CandidateStatusType;
+  nextStatus?: CandidateStatusType;
+  isManagerSession: boolean;
+  membershipRole: string;
+  role: string;
+}) {
+  if (!nextStatus || nextStatus === currentStatus) return true;
+  if (role === "ADMIN") return true;
+  if (isManagerSession) {
+    return currentStatus === "OFFER" && nextStatus === "HIRE";
+  }
+
+  return candidateStatusTransitions[currentStatus].includes(nextStatus);
 }
 
 async function ensureProjectInWorkspace(
@@ -276,22 +307,24 @@ export async function PATCH(
       key,
     ),
   );
+  const currentStatus = normalizeCandidateStatus(currentCandidate.status);
   if (
     hasManagerReviewUpdate &&
-    !isWorkspaceManagerOrAdmin(membership.membershipRole, session.user.role)
+    (membership.membershipRole !== "MANAGER" || currentStatus !== "OFFER")
   ) {
     return NextResponse.json(
       {
         error:
-          "Chỉ Quản lý, HR Admin hoặc Admin mới có thể duyệt đề xuất tuyển dụng.",
+          "Chỉ tài khoản Sếp mới được đánh giá khi CV đang ở trạng thái Offer.",
       },
       { status: 403 },
     );
   }
 
+  const nextStatus = parsed.data.status;
   if (
     !canManagerUpdateCandidateStatus(
-      parsed.data.status,
+      nextStatus,
       membership.membershipRole,
       session.user.role,
     )
@@ -299,18 +332,36 @@ export async function PATCH(
     return NextResponse.json(
       {
         error:
-          "Quản lý chỉ được chốt các trạng thái cuối như offer, từ chối hoặc nhận việc.",
+          "Sếp chỉ được chuyển ứng viên từ Offer sang Đã tuyển.",
       },
       { status: 403 },
     );
   }
 
-  const nextStatus = parsed.data.status;
-  const resolvedStatus = nextStatus ?? currentCandidate.status;
+  if (
+    !canTransitionStatus({
+      currentStatus,
+      nextStatus,
+      isManagerSession,
+      membershipRole: membership.membershipRole,
+      role: session.user.role,
+    })
+  ) {
+    return NextResponse.json(
+      { error: "Trạng thái chuyển tiếp không hợp lệ theo luồng tuyển dụng." },
+      { status: 400 },
+    );
+  }
+
+  const resolvedStatus = nextStatus ?? currentStatus;
   const nextInterviewDate =
     parsed.data.interviewDate ?? currentCandidate.interviewDate ?? "";
   const nextInterviewerName =
     parsed.data.interviewerName ?? currentCandidate.interviewerName ?? "";
+  const nextNoHireReason =
+    parsed.data.noHireReason !== undefined
+      ? parsed.data.noHireReason.trim()
+      : (currentCandidate.noHireReason ?? "");
 
   if (
     requiresInterviewDetails(resolvedStatus) &&
@@ -321,6 +372,13 @@ export async function PATCH(
         error:
           "Khi chuyển sang trạng thái phỏng vấn, cần nhập ngày phỏng vấn và người phỏng vấn.",
       },
+      { status: 400 },
+    );
+  }
+
+  if (resolvedStatus === "NO_HIRE" && !nextNoHireReason) {
+    return NextResponse.json(
+      { error: "Cần chọn lý do không tuyển khi chuyển ứng viên sang Không tuyển." },
       { status: 400 },
     );
   }
@@ -540,8 +598,14 @@ export async function PATCH(
   appendChange(
     historyChanges,
     "Trạng thái",
-    currentCandidate.status,
+    currentStatus,
     nextStatus,
+  );
+  appendChange(
+    historyChanges,
+    "Lý do không tuyển",
+    currentCandidate.noHireReason,
+    resolvedStatus === "NO_HIRE" ? nextNoHireReason : null,
   );
 
   if (hasManagerReviewUpdate) {
@@ -553,7 +617,7 @@ export async function PATCH(
     );
     appendChange(
       historyChanges,
-      "Offer manager đề xuất",
+      "Offer sếp đề xuất",
       currentCandidate.managerOfferSalary,
       parsed.data.managerOfferSalary,
     );
@@ -571,6 +635,12 @@ export async function PATCH(
       ...(isManagerSession
         ? {
             status: nextStatus ?? undefined,
+            noHireReason:
+              nextStatus !== undefined
+                ? resolvedStatus === "NO_HIRE"
+                  ? nextNoHireReason
+                  : null
+                : undefined,
           }
         : {
             fullName: parsed.data.fullName,
@@ -595,6 +665,13 @@ export async function PATCH(
             projectId,
             skillsJson: nextSkillsJson,
             status: nextStatus ?? undefined,
+            noHireReason:
+              nextStatus !== undefined ||
+              parsed.data.noHireReason !== undefined
+                ? resolvedStatus === "NO_HIRE"
+                  ? nextNoHireReason
+                  : null
+                : undefined,
           }),
       ...(hasManagerReviewUpdate
         ? {
@@ -618,10 +695,10 @@ export async function PATCH(
       data: {
         candidateId,
         fromStatus:
-          nextStatus && nextStatus !== currentCandidate.status
-            ? currentCandidate.status
-            : currentCandidate.status,
-        toStatus: nextStatus ?? currentCandidate.status,
+          nextStatus && nextStatus !== currentStatus
+            ? currentStatus
+            : currentStatus,
+        toStatus: nextStatus ?? currentStatus,
         changedBy: session.user.id,
         note: noteParts.join("\n") || null,
       },

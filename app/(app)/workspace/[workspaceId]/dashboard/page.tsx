@@ -26,10 +26,12 @@ import {
 import { notFound, redirect } from "next/navigation";
 
 import { DashboardCharts } from "@/components/dashboard/dashboard-charts";
+import { WorkspaceTodoCard } from "@/components/dashboard/workspace-todo-card";
 import { Badge } from "@/components/ui/badge";
 import { auth } from "@/lib/auth";
 import { requireWorkspaceAccess } from "@/lib/permissions";
 import { prisma } from "@/lib/prisma";
+import { normalizeCandidateStatus } from "@/lib/utils";
 
 function getPeriodRange(period: string) {
   const now = new Date();
@@ -64,15 +66,18 @@ export default async function WorkspaceDashboardPage({
   const { workspaceId } = await params;
   const { period = "month", hrId = "" } = await searchParams;
 
+  let membershipRole: string | null = null;
+
   try {
-    await requireWorkspaceAccess(workspaceId, session.user.id, session.user.role);
+    const access = await requireWorkspaceAccess(workspaceId, session.user.id, session.user.role);
+    membershipRole = access.membershipRole;
   } catch {
     notFound();
   }
 
   const range = getPeriodRange(period);
 
-  const [workspace, candidates, members, monthlyCandidates] = await Promise.all([
+  const [workspace, candidates, members, monthlyCandidates, workspaceTodos] = await Promise.all([
     prisma.workspace.findUnique({ where: { id: workspaceId } }),
     prisma.candidate.findMany({
       where: {
@@ -102,25 +107,40 @@ export default async function WorkspaceDashboardPage({
         createdAt: true,
       },
     }),
+    prisma.workspaceTodo.findMany({
+      where: { workspaceId },
+      orderBy: [{ done: "asc" }, { createdAt: "desc" }],
+    }),
   ]);
 
   if (!workspace) notFound();
 
   const hrMembers = members.filter((member) => member.role !== "MANAGER");
+  const canManageTodos = session.user.role === "ADMIN" || membershipRole === "HR_ADMIN" || membershipRole === "HR";
+  const initialTodos = workspaceTodos.map((todo) => ({
+    ...todo,
+    createdAt: todo.createdAt.toISOString(),
+    updatedAt: todo.updatedAt.toISOString(),
+  }));
 
   const total = candidates.length;
-  const processing = candidates.filter((item) => ["NEW", "REVIEWING", "PASS_CV"].includes(item.status)).length;
-  const interviewing = candidates.filter((item) => ["INTERVIEW", "INTERVIEWED"].includes(item.status)).length;
-  const passed = candidates.filter((item) => item.status === "PASSED").length;
-  const offered = candidates.filter((item) => item.status === "OFFERED").length;
-  const onboarded = candidates.filter((item) => item.status === "ONBOARDED").length;
+  const processing = candidates.filter((item) =>
+    ["NEW", "INTERVIEW", "OFFER", "HIRE", "ONBOARDED"].includes(
+      normalizeCandidateStatus(item.status),
+    ),
+  ).length;
+  const interviewing = candidates.filter((item) => normalizeCandidateStatus(item.status) === "INTERVIEW").length;
+  const offered = candidates.filter((item) => normalizeCandidateStatus(item.status) === "OFFER").length;
+  const hired = candidates.filter((item) => normalizeCandidateStatus(item.status) === "HIRE").length;
+  const onboarded = candidates.filter((item) => normalizeCandidateStatus(item.status) === "ONBOARDED").length;
+  const permanent = candidates.filter((item) => normalizeCandidateStatus(item.status) === "PERMANENT").length;
   const interviewScheduled = candidates.filter((item) => Boolean(item.interviewDate)).length;
   const managerApproved = candidates.filter((item) => item.managerDecision === "APPROVED").length;
   const managerPending = candidates.filter(
     (item) => !item.managerDecision || item.managerDecision === "PENDING",
   ).length;
   const managerReviewed = candidates.filter((item) => Boolean(item.managerReviewedAt)).length;
-  const offerRate = total ? Math.round((((offered + onboarded) / total) * 100 + Number.EPSILON) * 10) / 10 : 0;
+  const offerRate = total ? Math.round((((offered + hired + onboarded + permanent) / total) * 100 + Number.EPSILON) * 10) / 10 : 0;
 
   const quickOverview = [
     {
@@ -166,11 +186,12 @@ export default async function WorkspaceDashboardPage({
     .filter((item) => item.value > 0);
 
   const funnelData = [
-    { name: "Nhận CV", value: total },
-    { name: "Phỏng vấn", value: interviewing },
-    { name: "Pass", value: passed },
-    { name: "Offer", value: offered },
-    { name: "Onboard", value: onboarded },
+    { name: "Mới nhận", value: total },
+    { name: "Mời phỏng vấn", value: interviewing },
+    { name: "Đã Offer", value: offered },
+    { name: "Đã tuyển", value: hired },
+    { name: "Nhận việc", value: onboarded },
+    { name: "Chính thức", value: permanent },
   ];
 
   const quickSummary = [
@@ -202,9 +223,9 @@ export default async function WorkspaceDashboardPage({
       iconClassName: "bg-secondary/12 text-secondary",
     },
     {
-      label: "Pass phỏng vấn",
-      value: passed,
-      note: "Có thể đẩy sang offer",
+      label: "Đã tuyển",
+      value: hired,
+      note: "Đã được duyệt tuyển",
       icon: CheckCheck,
       cardClassName: "bg-[linear-gradient(145deg,rgba(221,246,241,0.98),rgba(255,255,255,0.96))]",
       textClassName: "text-tertiary",
@@ -357,6 +378,11 @@ export default async function WorkspaceDashboardPage({
             </article>
           );
         })}
+        <WorkspaceTodoCard
+          workspaceId={workspaceId}
+          initialTodos={initialTodos}
+          canManage={canManageTodos}
+        />
       </section>
 
       <DashboardCharts volumeData={volumeData} hrDistribution={hrDistribution} funnelData={funnelData} />

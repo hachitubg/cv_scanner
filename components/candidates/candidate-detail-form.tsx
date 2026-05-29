@@ -17,8 +17,10 @@ import { Textarea } from "@/components/ui/textarea";
 import {
   candidateStatusMeta,
   formatDateTime,
+  getCandidateStatusOptions,
   managerDecisionMeta,
   managerFinalStatusMeta,
+  normalizeCandidateStatus,
   toBirthYear,
   toDateTimeLocalValue,
 } from "@/lib/utils";
@@ -29,6 +31,7 @@ import {
   type ManagerDecisionType,
   type ManagerFinalStatusType,
   type ProjectOption,
+  type WorkspaceDropdownOption,
   type WorkspaceMemberOption,
   type WorkspaceRoleType,
 } from "@/types";
@@ -63,6 +66,7 @@ type CandidateDetailFormProps = {
     managerReviewNote: string | null;
     managerReviewedAt: Date | string | null;
     managerReviewedBy: { name: string } | null;
+    noHireReason: string | null;
     status: string;
     hrId: string;
     projectId: string | null;
@@ -79,20 +83,26 @@ type CandidateDetailFormProps = {
   };
   members: WorkspaceMemberOption[];
   projects: ProjectOption[];
+  positionOptions: WorkspaceDropdownOption[];
+  noHireReasonOptions: WorkspaceDropdownOption[];
   canDelete: boolean;
   canEditCandidateData: boolean;
   canReviewCandidate: boolean;
 };
 
 function needsInterviewDetails(status: string) {
-  return status === "INTERVIEW" || status === "INTERVIEWED";
+  return status === "INTERVIEW";
 }
 
 function isStatusTransition(entry: {
   fromStatus: string | null;
   toStatus: string;
 }) {
-  return Boolean(entry.fromStatus && entry.fromStatus !== entry.toStatus);
+  return Boolean(
+    entry.fromStatus &&
+      normalizeCandidateStatus(entry.fromStatus) !==
+        normalizeCandidateStatus(entry.toStatus),
+  );
 }
 
 export function CandidateDetailForm({
@@ -100,6 +110,8 @@ export function CandidateDetailForm({
   candidate,
   members,
   projects,
+  positionOptions,
+  noHireReasonOptions,
   canDelete,
   canEditCandidateData,
   canReviewCandidate,
@@ -124,13 +136,15 @@ export function CandidateDetailForm({
     interviewFeedback: candidate.interviewFeedback ?? "",
     hrId: candidate.hrId,
     projectId: candidate.projectId ?? "",
-    status: candidate.status,
+    status: normalizeCandidateStatus(candidate.status),
+    noHireReason: candidate.noHireReason ?? "",
     statusNote: "",
     managerDecision:
       (candidate.managerDecision as ManagerDecisionType) || "PENDING",
     managerOfferSalary: candidate.managerOfferSalary ?? "",
     managerReviewNote: candidate.managerReviewNote ?? "",
-    managerFinalStatus: "",
+    managerFinalStatus:
+      normalizeCandidateStatus(candidate.status) === "OFFER" ? "HIRE" : "",
   });
   const [error, setError] = useState<string | null>(null);
   const [isPending, startTransition] = useTransition();
@@ -138,10 +152,23 @@ export function CandidateDetailForm({
   const statusLabel = useMemo(
     () =>
       candidateStatusMeta[
-        (form.status as keyof typeof candidateStatusMeta) || "NEW"
+        normalizeCandidateStatus(form.status)
       ],
     [form.status],
   );
+  const positionSelectOptions = useMemo(() => {
+    const trimmedPosition = form.position.trim();
+    const configuredPositions = positionOptions.map((option) => option.name);
+
+    if (
+      trimmedPosition &&
+      !configuredPositions.some((position) => position === trimmedPosition)
+    ) {
+      return [trimmedPosition, ...configuredPositions];
+    }
+
+    return configuredPositions;
+  }, [form.position, positionOptions]);
 
   const reviewMeta = useMemo(
     () =>
@@ -149,6 +176,10 @@ export function CandidateDetailForm({
         (form.managerDecision as ManagerDecisionType) || "PENDING"
       ],
     [form.managerDecision],
+  );
+  const statusOptions = useMemo(
+    () => getCandidateStatusOptions(candidate.status, "hr"),
+    [candidate.status],
   );
 
   function updateField(name: string, value: string) {
@@ -167,6 +198,10 @@ export function CandidateDetailForm({
       setError(
         "Khi chuyển sang trạng thái phỏng vấn, cần nhập ngày phỏng vấn và người phỏng vấn.",
       );
+      return;
+    }
+    if (form.status === "NO_HIRE" && !form.noHireReason.trim()) {
+      setError("Cần chọn lý do không tuyển trước khi lưu.");
       return;
     }
 
@@ -190,6 +225,8 @@ export function CandidateDetailForm({
           hrId: form.hrId,
           projectId: form.projectId || null,
           status: form.status,
+          noHireReason:
+            form.status === "NO_HIRE" ? form.noHireReason.trim() : "",
           statusNote: form.statusNote,
           interviewDate: form.interviewDate
             ? new Date(form.interviewDate).toISOString()
@@ -221,13 +258,10 @@ export function CandidateDetailForm({
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          managerDecision: form.managerDecision,
-          managerOfferSalary: form.managerOfferSalary,
+          managerDecision: "APPROVED",
           managerReviewNote: form.managerReviewNote,
-          status: form.managerFinalStatus || undefined,
-          statusNote: form.managerFinalStatus
-            ? "Quản lý chốt trên màn hình chi tiết"
-            : undefined,
+          status: "HIRE",
+          statusNote: "Sếp chốt tuyển trên màn hình chi tiết",
         }),
       });
 
@@ -332,12 +366,24 @@ export function CandidateDetailForm({
             </div>
 
             <div className="mt-5 grid gap-5 md:grid-cols-2">
-              <FormInput
-                label="Vị trí ứng tuyển"
-                value={form.position}
-                onChange={(value) => updateField("position", value)}
-                disabled={fieldsDisabled}
-              />
+              <div>
+                <label className="label">Vị trí ứng tuyển</label>
+                <select
+                  className="field"
+                  value={form.position}
+                  onChange={(event) =>
+                    updateField("position", event.target.value)
+                  }
+                  disabled={fieldsDisabled}
+                >
+                  <option value="">Chưa chọn vị trí</option>
+                  {positionSelectOptions.map((position) => (
+                    <option key={position} value={position}>
+                      {position}
+                    </option>
+                  ))}
+                </select>
+              </div>
               <FormInput
                 label="Nguồn"
                 value={form.source}
@@ -452,13 +498,34 @@ export function CandidateDetailForm({
                   value={form.status}
                   onChange={(e) => updateField("status", e.target.value)}
                 >
-                  {CANDIDATE_STATUSES.map((status) => (
+                  {statusOptions.map((status) => (
                     <option key={status} value={status}>
                       {candidateStatusMeta[status].label}
                     </option>
                   ))}
                 </select>
               </div>
+
+              {form.status === "NO_HIRE" ? (
+                <div className="mt-5">
+                  <label className="label">Lý do không tuyển</label>
+                  <select
+                    className="field"
+                    value={form.noHireReason}
+                    onChange={(event) =>
+                      updateField("noHireReason", event.target.value)
+                    }
+                    required
+                  >
+                    <option value="">Chọn lý do không tuyển</option>
+                    {noHireReasonOptions.map((reason) => (
+                      <option key={reason.id} value={reason.name}>
+                        {reason.name}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              ) : null}
 
               <div className="mt-5 grid gap-5 md:grid-cols-2">
                 <div>
@@ -519,67 +586,25 @@ export function CandidateDetailForm({
             </p>
             {canReviewCandidate ? (
               <>
-                <div className="mt-4">
-                  <label className="label">Quyết định duyệt</label>
-                  <select
-                    className="field"
-                    value={form.managerDecision}
-                    onChange={(e) =>
-                      updateField("managerDecision", e.target.value)
-                    }
-                  >
-                    {MANAGER_DECISIONS.map((decision) => (
-                      <option key={decision} value={decision}>
-                        {managerDecisionMeta[decision].label}
-                      </option>
-                    ))}
-                  </select>
-                </div>
-
                 <div className="mt-5">
-                  <label className="label">Offer manager đề xuất</label>
-                  <Input
-                    value={form.managerOfferSalary}
-                    onChange={(e) =>
-                      updateField("managerOfferSalary", e.target.value)
-                    }
-                    placeholder="Ví dụ: 25.000.000 VND"
-                  />
-                </div>
-
-                <div className="mt-5">
-                  <label className="label">Nhận xét duyệt tuyển</label>
+                  <label className="label">Ghi chú của sếp</label>
                   <Textarea
                     rows={4}
                     value={form.managerReviewNote}
                     onChange={(e) =>
                       updateField("managerReviewNote", e.target.value)
                     }
-                    placeholder="Ví dụ: phù hợp dự án ABC, có thể đi tiếp offer"
+                    placeholder="Ghi chú không bắt buộc"
                   />
                 </div>
 
-                <div className="mt-5">
-                  <label className="label">Chốt trạng thái cuối</label>
-                  <select
-                    className="field"
-                    value={form.managerFinalStatus}
-                    onChange={(e) =>
-                      updateField("managerFinalStatus", e.target.value)
-                    }
-                  >
-                    <option value="">Không đổi trạng thái</option>
-                    {MANAGER_FINAL_STATUSES.map((status) => (
-                      <option key={status} value={status}>
-                        {managerFinalStatusMeta[status].label}
-                      </option>
-                    ))}
-                  </select>
-                </div>
+                <p className="mt-4 rounded-[1.1rem] bg-surface-container-low px-4 py-3 text-sm font-semibold text-on-surface-variant">
+                  Khi lưu, hồ sơ sẽ chuyển sang trạng thái Đã tuyển.
+                </p>
 
                 <div className="mt-5">
                   <Button onClick={saveManagerReview} disabled={isPending}>
-                    {isPending ? "Đang lưu..." : "Lưu đánh giá tuyển dụng"}
+                    {isPending ? "Đang lưu..." : "Chuyển sang Đã tuyển"}
                   </Button>
                 </div>
               </>
@@ -642,13 +667,13 @@ export function CandidateDetailForm({
                     <Badge
                       className={
                         candidateStatusMeta[
-                          latestHistory.toStatus as keyof typeof candidateStatusMeta
+                          normalizeCandidateStatus(latestHistory.toStatus)
                         ].className
                       }
                     >
                       {
                         candidateStatusMeta[
-                          latestHistory.toStatus as keyof typeof candidateStatusMeta
+                          normalizeCandidateStatus(latestHistory.toStatus)
                         ].label
                       }
                     </Badge>
@@ -771,13 +796,13 @@ function HistoryModal({
                   <Badge
                     className={
                       candidateStatusMeta[
-                        entry.toStatus as keyof typeof candidateStatusMeta
+                        normalizeCandidateStatus(entry.toStatus)
                       ].className
                     }
                   >
                     {
                       candidateStatusMeta[
-                        entry.toStatus as keyof typeof candidateStatusMeta
+                        normalizeCandidateStatus(entry.toStatus)
                       ].label
                     }
                   </Badge>
@@ -786,7 +811,7 @@ function HistoryModal({
                       từ{" "}
                       {
                         candidateStatusMeta[
-                          entry.fromStatus as keyof typeof candidateStatusMeta
+                          normalizeCandidateStatus(entry.fromStatus)
                         ].shortLabel
                       }
                     </span>

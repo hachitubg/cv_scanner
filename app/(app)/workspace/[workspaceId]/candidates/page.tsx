@@ -1,31 +1,22 @@
 import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
 
-import { CandidatesFiltersBar } from "@/components/candidates/candidates-filters-bar";
 import { CandidatesListManager } from "@/components/candidates/candidates-list-manager";
 import { Button } from "@/components/ui/button";
 import { auth } from "@/lib/auth";
 import { requireWorkspaceAccess } from "@/lib/permissions";
 import { prisma } from "@/lib/prisma";
+import { ensureDefaultWorkspaceDropdownOptions } from "@/lib/workspace-config";
 
 export default async function CandidatesPage({
   params,
-  searchParams,
 }: {
   params: Promise<{ workspaceId: string }>;
-  searchParams: Promise<{
-    search?: string;
-    status?: string;
-    hrId?: string;
-    position?: string;
-    projectId?: string;
-  }>;
 }) {
   const session = await auth();
   if (!session?.user) redirect("/login");
 
   const { workspaceId } = await params;
-  const filters = await searchParams;
 
   let membership: Awaited<ReturnType<typeof requireWorkspaceAccess>> | null =
     null;
@@ -42,41 +33,23 @@ export default async function CandidatesPage({
   const isManager =
     session.user.role !== "ADMIN" && membership!.membershipRole === "MANAGER";
 
-  const [workspace, members, projects, candidates] = await Promise.all([
+  await ensureDefaultWorkspaceDropdownOptions(workspaceId);
+
+  const [workspace, candidates, noHireReasonOptions] = await Promise.all([
     prisma.workspace.findUnique({ where: { id: workspaceId } }),
-    prisma.workspaceMember.findMany({
-      where: { workspaceId },
-      include: { user: true },
-      orderBy: { joinedAt: "asc" },
-    }),
-    prisma.project.findMany({
-      where: { workspaceId },
-      orderBy: { createdAt: "desc" },
-    }),
     prisma.candidate.findMany({
       where: {
         workspaceId,
-        ...(filters.search
-          ? {
-              OR: [
-                { fullName: { contains: filters.search } },
-                { position: { contains: filters.search } },
-                { email: { contains: filters.search } },
-              ],
-            }
-          : {}),
-        ...(filters.status ? { status: filters.status } : {}),
-        ...(filters.hrId ? { hrId: filters.hrId } : {}),
-        ...(filters.position
-          ? { position: { contains: filters.position } }
-          : {}),
-        ...(filters.projectId ? { projectId: filters.projectId } : {}),
       },
       include: {
         hr: true,
         project: true,
         managerReviewedBy: true,
       },
+      orderBy: { createdAt: "desc" },
+    }),
+    prisma.workspaceDropdownOption.findMany({
+      where: { workspaceId, type: "NO_HIRE_REASON" },
       orderBy: { createdAt: "desc" },
     }),
   ]);
@@ -99,8 +72,8 @@ export default async function CandidatesPage({
             </h1>
             <p className="mt-3 text-base font-medium leading-8 text-on-surface-variant">
               {isManager
-                ? "Xem nhanh danh sách đã được lọc sẵn, mở CV và duyệt đề xuất tuyển dụng ngay trên từng ứng viên."
-                : "Quản lý hồ sơ theo trạng thái, dự án tuyển dụng và chia sẻ nhanh danh sách đã lọc cho quản lý."}
+                ? "Xem nhanh danh sách CV, mở hồ sơ và duyệt đề xuất tuyển dụng ngay trên từng ứng viên."
+                : "Quản lý hồ sơ bằng bảng Excel với lọc, sắp xếp, ghim cột và thao tác nhanh trên từng ứng viên."}
             </p>
           </div>
 
@@ -120,23 +93,6 @@ export default async function CandidatesPage({
             ) : null}
           </div>
         </div>
-
-        <CandidatesFiltersBar
-          members={members
-            .filter((member) => member.role !== "MANAGER")
-            .map((member) => ({
-              id: member.userId,
-              name: member.user.name,
-              email: member.user.email,
-              role: member.role as "HR_ADMIN" | "HR" | "MANAGER",
-            }))}
-          projects={projects.map((project) => ({
-            id: project.id,
-            name: project.name,
-            description: project.description,
-          }))}
-          initialFilters={filters}
-        />
       </section>
 
       <CandidatesListManager
@@ -164,10 +120,17 @@ export default async function CandidatesPage({
           managerReviewNote: candidate.managerReviewNote,
           managerReviewedAt: candidate.managerReviewedAt,
           managerReviewedByName: candidate.managerReviewedBy?.name ?? null,
+          noHireReason: candidate.noHireReason,
           hrId: candidate.hrId,
           hr: {
             name: candidate.hr.name,
           },
+        }))}
+        noHireReasonOptions={noHireReasonOptions.map((option) => ({
+          id: option.id,
+          type: "NO_HIRE_REASON",
+          name: option.name,
+          description: option.description,
         }))}
       />
     </main>

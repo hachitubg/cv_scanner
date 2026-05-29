@@ -8,6 +8,8 @@ import {
   requireWorkspaceHrAdmin,
 } from "@/lib/permissions";
 import { prisma } from "@/lib/prisma";
+import { ensureDefaultWorkspaceDropdownOptions } from "@/lib/workspace-config";
+import { normalizeCandidateStatus } from "@/lib/utils";
 
 export default async function CandidateDetailPage({
   params,
@@ -38,7 +40,9 @@ export default async function CandidateDetailPage({
     session.user.role,
   );
 
-  const [candidate, members, projects] = await Promise.all([
+  await ensureDefaultWorkspaceDropdownOptions(workspaceId);
+
+  const [candidate, members, projects, positionOptions, noHireReasonOptions] = await Promise.all([
     prisma.candidate.findUnique({
       where: { id: candidateId },
       include: {
@@ -60,6 +64,14 @@ export default async function CandidateDetailPage({
     }),
     prisma.project.findMany({
       where: { workspaceId },
+      orderBy: { createdAt: "desc" },
+    }),
+    prisma.workspaceDropdownOption.findMany({
+      where: { workspaceId, type: "POSITION" },
+      orderBy: { createdAt: "desc" },
+    }),
+    prisma.workspaceDropdownOption.findMany({
+      where: { workspaceId, type: "NO_HIRE_REASON" },
       orderBy: { createdAt: "desc" },
     }),
   ]);
@@ -112,9 +124,24 @@ export default async function CandidateDetailPage({
           name: project.name,
           description: project.description,
         }))}
+        positionOptions={positionOptions.map((option) => ({
+          id: option.id,
+          type: "POSITION",
+          name: option.name,
+          description: option.description,
+        }))}
+        noHireReasonOptions={noHireReasonOptions.map((option) => ({
+          id: option.id,
+          type: "NO_HIRE_REASON",
+          name: option.name,
+          description: option.description,
+        }))}
         canDelete={canDelete}
         canEditCandidateData={canEditCandidateData}
-        canReviewCandidate={session.user.role === "ADMIN" || membershipRole === "MANAGER" || membershipRole === "HR_ADMIN"}
+        canReviewCandidate={
+          membershipRole === "MANAGER" &&
+          normalizeCandidateStatus(candidate.status) === "OFFER"
+        }
       />
     </main>
   );

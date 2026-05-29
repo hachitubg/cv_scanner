@@ -4,11 +4,11 @@ import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import {
-  BriefcaseBusiness,
   ChevronDown,
   FolderOpen,
   LayoutDashboard,
   Menu,
+  Settings2,
   UploadCloud,
   Users,
   X,
@@ -66,13 +66,27 @@ export function WorkspaceSidebar({
     return () => document.removeEventListener("mousedown", handleClickOutside);
   }, []);
 
+  const candidatesHref = `/workspace/${workspaceId}/candidates`;
+  const uploadHref = `${candidatesHref}/upload`;
   const items = [
     { label: "Trang chủ", href: `/workspace/${workspaceId}/dashboard`, icon: LayoutDashboard },
-    { label: "Kho CV", href: `/workspace/${workspaceId}/candidates`, icon: FolderOpen },
-    ...(!isManager ? [{ label: "Upload CV", href: `/workspace/${workspaceId}/candidates/upload`, icon: UploadCloud }] : []),
-    ...(isHrAdmin ? [{ label: "Dự án", href: `/workspace/${workspaceId}/projects`, icon: BriefcaseBusiness }] : []),
+    { label: "Kho CV", href: candidatesHref, icon: FolderOpen },
+    ...(!isManager ? [{ label: "Upload CV", href: uploadHref, icon: UploadCloud }] : []),
+    ...(isHrAdmin ? [{ label: "Cấu hình", href: `/workspace/${workspaceId}/configuration`, icon: Settings2 }] : []),
     ...(isHrAdmin ? [{ label: "Thành viên", href: `/workspace/${workspaceId}/members`, icon: Users }] : []),
   ];
+
+  function isNavItemActive(href: string) {
+    if (href === candidatesHref) {
+      return (
+        pathname === candidatesHref ||
+        (pathname.startsWith(`${candidatesHref}/`) &&
+          !pathname.startsWith(uploadHref))
+      );
+    }
+
+    return pathname === href || pathname.startsWith(`${href}/`);
+  }
 
   return (
     <header className="sticky top-0 z-50 w-full bg-white/85 backdrop-blur-xl shadow-[0_4px_40px_-12px_rgba(160,57,100,0.10)]">
@@ -91,7 +105,7 @@ export function WorkspaceSidebar({
         <nav className="hidden flex-1 items-center justify-center gap-1 md:flex">
           {items.map((item) => {
             const Icon = item.icon;
-            const active = pathname === item.href || pathname.startsWith(`${item.href}/`);
+            const active = isNavItemActive(item.href);
             return (
               <Link
                 key={item.href}
@@ -184,7 +198,7 @@ export function WorkspaceSidebar({
             <nav className="space-y-1">
               {items.map((item) => {
                 const Icon = item.icon;
-                const active = pathname === item.href || pathname.startsWith(`${item.href}/`);
+                const active = isNavItemActive(item.href);
                 return (
                   <Link
                     key={item.href}

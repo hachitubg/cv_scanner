@@ -10,6 +10,8 @@ PRAGMA foreign_keys = OFF;
 
 DROP TABLE IF EXISTS "StatusHistory";
 DROP TABLE IF EXISTS "Candidate";
+DROP TABLE IF EXISTS "WorkspaceTodo";
+DROP TABLE IF EXISTS "WorkspaceDropdownOption";
 DROP TABLE IF EXISTS "Project";
 DROP TABLE IF EXISTS "CVFile";
 DROP TABLE IF EXISTS "WorkspaceMember";
@@ -92,6 +94,44 @@ CREATE TABLE "Project" (
 
 CREATE UNIQUE INDEX "Project_workspaceId_name_key" ON "Project"("workspaceId", "name");
 
+CREATE TABLE "WorkspaceDropdownOption" (
+  "id" TEXT NOT NULL PRIMARY KEY,
+  "workspaceId" TEXT NOT NULL,
+  "type" TEXT NOT NULL,
+  "name" TEXT NOT NULL,
+  "description" TEXT,
+  "createdAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  "updatedAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  CONSTRAINT "WorkspaceDropdownOption_workspaceId_fkey"
+    FOREIGN KEY ("workspaceId") REFERENCES "Workspace" ("id")
+    ON DELETE CASCADE ON UPDATE CASCADE
+);
+
+CREATE UNIQUE INDEX "WorkspaceDropdownOption_workspaceId_type_name_key"
+  ON "WorkspaceDropdownOption"("workspaceId", "type", "name");
+
+CREATE INDEX "WorkspaceDropdownOption_workspaceId_type_idx"
+  ON "WorkspaceDropdownOption"("workspaceId", "type");
+
+CREATE TABLE "WorkspaceTodo" (
+  "id" TEXT NOT NULL PRIMARY KEY,
+  "workspaceId" TEXT NOT NULL,
+  "title" TEXT NOT NULL,
+  "description" TEXT,
+  "done" BOOLEAN NOT NULL DEFAULT false,
+  "createdAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  "updatedAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  CONSTRAINT "WorkspaceTodo_workspaceId_fkey"
+    FOREIGN KEY ("workspaceId") REFERENCES "Workspace" ("id")
+    ON DELETE CASCADE ON UPDATE CASCADE
+);
+
+CREATE INDEX "WorkspaceTodo_workspaceId_done_idx"
+  ON "WorkspaceTodo"("workspaceId", "done");
+
+CREATE INDEX "WorkspaceTodo_workspaceId_createdAt_idx"
+  ON "WorkspaceTodo"("workspaceId", "createdAt");
+
 CREATE TABLE "Candidate" (
   "id" TEXT NOT NULL PRIMARY KEY,
   "workspaceId" TEXT NOT NULL,
@@ -122,6 +162,7 @@ CREATE TABLE "Candidate" (
   "managerReviewNote" TEXT,
   "managerReviewedAt" DATETIME,
   "managerReviewedById" TEXT,
+  "noHireReason" TEXT,
   "status" TEXT NOT NULL DEFAULT 'NEW',
   "createdAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
   "updatedAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,

@@ -17,10 +17,6 @@ function parseIntOrNull(value: FormDataEntryValue | null) {
   return Number.isFinite(parsed) ? parsed : null;
 }
 
-function requiresInterviewDetails(status: string) {
-  return status === "INTERVIEW" || status === "INTERVIEWED";
-}
-
 async function ensureProjectInWorkspace(
   projectId: string | null,
   workspaceId: string,
@@ -217,7 +213,7 @@ export async function POST(request: Request) {
     .map((item) => item.trim())
     .filter(Boolean);
 
-  const status = String(formData.get("status") ?? "NEW");
+  const status = "NEW";
   const requestedHrId =
     String(formData.get("hrId") ?? session.user.id).trim() || session.user.id;
   const interviewDate = String(formData.get("interviewDate") ?? "").trim();
@@ -244,19 +240,6 @@ export async function POST(request: Request) {
   } catch {
     return NextResponse.json(
       { error: "Người phụ trách phải là HR hoặc HR Admin trong workspace." },
-      { status: 400 },
-    );
-  }
-
-  if (
-    requiresInterviewDetails(status) &&
-    (!interviewDate || !interviewerName)
-  ) {
-    return NextResponse.json(
-      {
-        error:
-          "Khi tạo ứng viên ở trạng thái phỏng vấn, cần nhập ngày phỏng vấn và người phỏng vấn.",
-      },
       { status: 400 },
     );
   }

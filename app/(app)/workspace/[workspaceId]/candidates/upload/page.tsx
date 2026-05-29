@@ -22,7 +22,7 @@ export default async function UploadCandidatePage({
     notFound();
   }
 
-  const [members, projects] = await Promise.all([
+  const [members, projects, positionOptions] = await Promise.all([
     prisma.workspaceMember.findMany({
       where: { workspaceId },
       include: { user: true },
@@ -30,6 +30,10 @@ export default async function UploadCandidatePage({
     }),
     prisma.project.findMany({
       where: { workspaceId },
+      orderBy: { createdAt: "desc" },
+    }),
+    prisma.workspaceDropdownOption.findMany({
+      where: { workspaceId, type: "POSITION" },
       orderBy: { createdAt: "desc" },
     }),
   ]);
@@ -58,6 +62,12 @@ export default async function UploadCandidatePage({
           id: project.id,
           name: project.name,
           description: project.description,
+        }))}
+        positionOptions={positionOptions.map((option) => ({
+          id: option.id,
+          type: "POSITION",
+          name: option.name,
+          description: option.description,
         }))}
       />
     </main>

@@ -51,6 +51,8 @@ model Workspace {
   candidates Candidate[]
   cvFiles    CVFile[]
   projects   Project[]
+  dropdownOptions WorkspaceDropdownOption[]
+  todos     WorkspaceTodo[]
 }
 
 model WorkspaceMember {
@@ -116,6 +118,7 @@ model Candidate {
   managerReviewNote   String?
   managerReviewedAt   DateTime?
   managerReviewedById String?
+  noHireReason        String?
 
   status    String   @default("NEW")
   createdAt DateTime @default(now())
@@ -141,6 +144,36 @@ model Project {
   candidates Candidate[]
 
   @@unique([workspaceId, name])
+}
+
+model WorkspaceDropdownOption {
+  id          String   @id @default(cuid())
+  workspaceId String
+  type        String
+  name        String
+  description String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+
+  @@unique([workspaceId, type, name])
+  @@index([workspaceId, type])
+}
+
+model WorkspaceTodo {
+  id          String   @id @default(cuid())
+  workspaceId String
+  title       String
+  description String?
+  done        Boolean  @default(false)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+
+  @@index([workspaceId, done])
+  @@index([workspaceId, createdAt])
 }
 
 model StatusHistory {
