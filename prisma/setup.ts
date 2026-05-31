@@ -118,6 +118,8 @@ CREATE TABLE "WorkspaceTodo" (
   "workspaceId" TEXT NOT NULL,
   "assignedToId" TEXT,
   "workDate" TEXT,
+  "workMonth" TEXT,
+  "workWeek" INTEGER,
   "title" TEXT NOT NULL,
   "description" TEXT,
   "done" BOOLEAN NOT NULL DEFAULT false,
@@ -145,6 +147,12 @@ CREATE INDEX "WorkspaceTodo_workspaceId_assignedToId_idx"
 
 CREATE INDEX "WorkspaceTodo_workspaceId_workDate_idx"
   ON "WorkspaceTodo"("workspaceId", "workDate");
+
+CREATE INDEX "WorkspaceTodo_workspaceId_workMonth_idx"
+  ON "WorkspaceTodo"("workspaceId", "workMonth");
+
+CREATE INDEX "WorkspaceTodo_workspaceId_workWeek_idx"
+  ON "WorkspaceTodo"("workspaceId", "workWeek");
 
 CREATE TABLE "Candidate" (
   "id" TEXT NOT NULL PRIMARY KEY,

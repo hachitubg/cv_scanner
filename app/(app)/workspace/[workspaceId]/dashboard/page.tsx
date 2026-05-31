@@ -109,7 +109,7 @@ export default async function WorkspaceDashboardPage({
     }),
     prisma.workspaceTodo.findMany({
       where: { workspaceId },
-      orderBy: [{ workDate: "desc" }, { updatedAt: "desc" }],
+      orderBy: [{ workMonth: "desc" }, { workWeek: "asc" }, { updatedAt: "desc" }],
     }),
   ]);
 

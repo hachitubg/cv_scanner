@@ -12,7 +12,8 @@ const todoSchema = z.object({
   title: z.string().trim().min(2, "Tên việc cần làm phải có ít nhất 2 ký tự."),
   description: z.string().trim().optional(),
   assignedToId: z.string().trim().min(1, "Vui lòng chọn người phụ trách."),
-  workDate: z.string().trim().regex(/^\d{4}-\d{2}-\d{2}$/, "Vui lòng chọn ngày hợp lệ."),
+  workMonth: z.string().trim().regex(/^\d{4}-\d{2}$/, "Vui lòng chọn tháng hợp lệ."),
+  workWeek: z.coerce.number().int().min(1, "Vui lòng chọn tuần hợp lệ.").max(6, "Vui lòng chọn tuần hợp lệ."),
 });
 
 export async function GET(
@@ -37,7 +38,7 @@ export async function GET(
 
   const todos = await prisma.workspaceTodo.findMany({
     where: { workspaceId },
-    orderBy: [{ workDate: "desc" }, { updatedAt: "desc" }],
+    orderBy: [{ workMonth: "desc" }, { workWeek: "asc" }, { updatedAt: "desc" }],
   });
 
   return NextResponse.json(todos);
@@ -92,7 +93,8 @@ export async function POST(
     data: {
       workspaceId,
       assignedToId: parsed.data.assignedToId,
-      workDate: parsed.data.workDate,
+      workMonth: parsed.data.workMonth,
+      workWeek: parsed.data.workWeek,
       title: parsed.data.title,
       description: parsed.data.description || null,
     },

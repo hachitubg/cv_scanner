@@ -167,6 +167,8 @@ model WorkspaceTodo {
   workspaceId String
   assignedToId String?
   workDate    String?
+  workMonth   String?
+  workWeek    Int?
   title       String
   description String?
   done        Boolean  @default(false)
@@ -181,6 +183,8 @@ model WorkspaceTodo {
   @@index([workspaceId, updatedAt])
   @@index([workspaceId, assignedToId])
   @@index([workspaceId, workDate])
+  @@index([workspaceId, workMonth])
+  @@index([workspaceId, workWeek])
 }
 
 model StatusHistory {

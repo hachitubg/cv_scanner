@@ -3,6 +3,8 @@
 import { useMemo, useState, type FormEvent } from "react";
 import {
   CheckCircle2,
+  ChevronDown,
+  ChevronRight,
   Circle,
   ClipboardList,
   EyeOff,
@@ -28,19 +30,37 @@ type WorkspaceTodoCardProps = {
   canManage: boolean;
 };
 
-function getDateInputValue(date = new Date()) {
+const weekOptions = [1, 2, 3, 4, 5, 6];
+
+function getMonthInputValue(date = new Date()) {
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, "0");
+  return `${year}-${month}`;
+}
+
+function getWeekInMonth(date = new Date()) {
+  return Math.max(1, Math.min(6, Math.ceil(date.getDate() / 7)));
+}
+
+function getFallbackDate(todo: WorkspaceTodo) {
+  if (todo.workDate) return todo.workDate;
+  const date = new Date(todo.createdAt);
+  if (Number.isNaN(date.getTime())) return `${getMonthInputValue()}-01`;
   const year = date.getFullYear();
   const month = String(date.getMonth() + 1).padStart(2, "0");
   const day = String(date.getDate()).padStart(2, "0");
   return `${year}-${month}-${day}`;
 }
 
-function getTodoDate(todo: WorkspaceTodo) {
-  return todo.workDate || getDateInputValue(new Date(todo.createdAt));
+function getTodoMonth(todo: WorkspaceTodo) {
+  return todo.workMonth || getFallbackDate(todo).slice(0, 7);
 }
 
-function getDateTimestamp(dateValue: string) {
-  return new Date(`${dateValue}T00:00:00`).getTime() || 0;
+function getTodoWeek(todo: WorkspaceTodo) {
+  if (todo.workWeek) return todo.workWeek;
+  const day = Number(getFallbackDate(todo).slice(8, 10));
+  if (!Number.isFinite(day)) return 1;
+  return Math.max(1, Math.min(6, Math.ceil(day / 7)));
 }
 
 function getTimestamp(value: Date | string) {
@@ -49,16 +69,20 @@ function getTimestamp(value: Date | string) {
 
 function sortTodos(todos: WorkspaceTodo[]) {
   return [...todos].sort((left, right) => {
-    const dateDiff = getDateTimestamp(getTodoDate(right)) - getDateTimestamp(getTodoDate(left));
-    if (dateDiff !== 0) return dateDiff;
+    const monthDiff = getTodoMonth(right).localeCompare(getTodoMonth(left));
+    if (monthDiff !== 0) return monthDiff;
+
+    const weekDiff = getTodoWeek(left) - getTodoWeek(right);
+    if (weekDiff !== 0) return weekDiff;
+
     return getTimestamp(right.updatedAt) - getTimestamp(left.updatedAt);
   });
 }
 
-function formatWorkDate(dateValue: string) {
-  const [year, month, day] = dateValue.split("-");
-  if (!year || !month || !day) return dateValue;
-  return `${day}/${month}/${year}`;
+function formatMonthLabel(monthValue: string) {
+  const [year, month] = monthValue.split("-");
+  if (!year || !month) return monthValue;
+  return `Tháng ${Number(month)}/${year}`;
 }
 
 export function WorkspaceTodoCard({
@@ -67,11 +91,16 @@ export function WorkspaceTodoCard({
   hrMembers,
   canManage,
 }: WorkspaceTodoCardProps) {
+  const currentMonth = getMonthInputValue();
+  const currentWeek = getWeekInMonth();
   const [todos, setTodos] = useState(() => sortTodos(initialTodos));
   const [isOpen, setIsOpen] = useState(false);
   const [isCreateOpen, setIsCreateOpen] = useState(false);
   const [hideCompleted, setHideCompleted] = useState(false);
-  const [workDate, setWorkDate] = useState(getDateInputValue());
+  const [collapsedWeeks, setCollapsedWeeks] = useState<number[]>([]);
+  const [selectedMonth, setSelectedMonth] = useState(currentMonth);
+  const [workMonth, setWorkMonth] = useState(currentMonth);
+  const [workWeek, setWorkWeek] = useState(currentWeek);
   const [assignedToId, setAssignedToId] = useState(hrMembers[0]?.id ?? "");
   const [title, setTitle] = useState("");
   const [description, setDescription] = useState("");
@@ -85,39 +114,72 @@ export function WorkspaceTodoCard({
   const pendingTodos = useMemo(() => todos.filter((todo) => !todo.done), [todos]);
   const completedTodos = todos.length - pendingTodos.length;
   const completionPercent = todos.length ? Math.round((completedTodos / todos.length) * 100) : 0;
+  const selectedMonthTodos = useMemo(
+    () => todos.filter((todo) => getTodoMonth(todo) === selectedMonth),
+    [selectedMonth, todos],
+  );
+  const visibleWeekGroups = useMemo(() => {
+    const assigneeGroups = new Map<string, WorkspaceTodo[]>();
 
-  const todoRows = useMemo(() => {
-    const groups = new Map<string, WorkspaceTodo[]>();
+    sortTodos(selectedMonthTodos).forEach((todo) => {
+      if (hideCompleted && todo.done) return;
 
-    sortTodos(todos).forEach((todo) => {
-      const visible = !hideCompleted || !todo.done;
-      if (!visible) return;
-
-      const key = `${getTodoDate(todo)}::${todo.assignedToId || "__unassigned"}`;
-      groups.set(key, [...(groups.get(key) ?? []), todo]);
+      const key = `${getTodoWeek(todo)}::${todo.assignedToId || "__unassigned"}`;
+      assigneeGroups.set(key, [...(assigneeGroups.get(key) ?? []), todo]);
     });
 
-    return Array.from(groups.entries()).map(([key, items]) => {
-      const [date, assigneeId] = key.split("::");
-      return {
-        key,
-        date,
-        assigneeName: hrNameById.get(assigneeId) ?? "Chưa phân công",
-        items,
-      };
+    const rows = Array.from(assigneeGroups.entries())
+      .map(([key, items]) => {
+        const [week, assigneeId] = key.split("::");
+        return {
+          key,
+          week: Number(week),
+          assigneeName: hrNameById.get(assigneeId) ?? "Chưa phân công",
+          items,
+        };
+      })
+      .sort((left, right) => {
+        const weekDiff = left.week - right.week;
+        if (weekDiff !== 0) return weekDiff;
+        return left.assigneeName.localeCompare(right.assigneeName);
+      });
+
+    const weekGroups = new Map<number, typeof rows>();
+    rows.forEach((row) => {
+      weekGroups.set(row.week, [...(weekGroups.get(row.week) ?? []), row]);
     });
-  }, [hideCompleted, hrNameById, todos]);
+
+    return Array.from(weekGroups.entries()).map(([week, weekRows]) => ({
+      week,
+      rows: weekRows,
+      total: weekRows.reduce((sum, row) => sum + row.items.length, 0),
+      done: weekRows.reduce(
+        (sum, row) => sum + row.items.filter((todo) => todo.done).length,
+        0,
+      ),
+    }));
+  }, [hideCompleted, hrNameById, selectedMonthTodos]);
+
+  function toggleWeekGroup(week: number) {
+    setCollapsedWeeks((current) =>
+      current.includes(week)
+        ? current.filter((item) => item !== week)
+        : [...current, week],
+    );
+  }
 
   const openCreateDialog = () => {
     if (!canManage) return;
     setError("");
+    setWorkMonth(selectedMonth);
     setIsOpen(true);
     setIsCreateOpen(true);
   };
 
   const closeCreateDialog = () => {
     setIsCreateOpen(false);
-    setWorkDate(getDateInputValue());
+    setWorkMonth(selectedMonth);
+    setWorkWeek(currentWeek);
     setAssignedToId(hrMembers[0]?.id ?? "");
     setTitle("");
     setDescription("");
@@ -126,7 +188,7 @@ export function WorkspaceTodoCard({
 
   const handleCreateTodo = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
-    if (!canManage || !workDate || !assignedToId || !title.trim()) return;
+    if (!canManage || !workMonth || !workWeek || !assignedToId || !title.trim()) return;
 
     setBusyId("create");
     setError("");
@@ -136,7 +198,8 @@ export function WorkspaceTodoCard({
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          workDate,
+          workMonth,
+          workWeek,
           assignedToId,
           title,
           description,
@@ -148,6 +211,7 @@ export function WorkspaceTodoCard({
         throw new Error(payload.error || "Không thể thêm báo cáo công việc.");
       }
 
+      setSelectedMonth(workMonth);
       setTodos((current) => sortTodos([payload, ...current]));
       closeCreateDialog();
     } catch (err) {
@@ -260,10 +324,16 @@ export function WorkspaceTodoCard({
                 <p className="text-xs font-black uppercase tracking-[0.2em] text-primary">Workspace report</p>
                 <h2 className="mt-2 text-2xl font-black tracking-tight text-on-surface">Báo cáo công việc</h2>
                 <p className="mt-2 text-sm font-medium text-on-surface-variant">
-                  Theo dõi công việc theo ngày, người phụ trách và nội dung cần xử lý.
+                  Theo dõi công việc theo tháng, tuần và người phụ trách.
                 </p>
               </div>
               <div className="flex shrink-0 flex-wrap items-center gap-2">
+                <Input
+                  type="month"
+                  value={selectedMonth}
+                  onChange={(event) => setSelectedMonth(event.target.value || currentMonth)}
+                  className="h-10 w-40 rounded-full bg-white text-sm font-black"
+                />
                 <button
                   type="button"
                   onClick={() => setHideCompleted((current) => !current)}
@@ -298,17 +368,21 @@ export function WorkspaceTodoCard({
             </div>
 
             <div className="max-h-[calc(88vh-132px)] overflow-auto p-5 sm:p-6">
+              <div className="mb-4 flex flex-wrap items-center justify-between gap-3 rounded-[1.3rem] bg-surface-container-low px-4 py-3">
+                <p className="text-sm font-black text-on-surface">{formatMonthLabel(selectedMonth)}</p>
+                <p className="text-xs font-black uppercase tracking-[0.14em] text-outline">
+                  {selectedMonthTodos.length} việc trong tháng
+                </p>
+              </div>
+
               {error ? (
                 <p className="mb-4 rounded-2xl bg-rose-50 px-3 py-2 text-sm font-semibold text-rose-600">{error}</p>
               ) : null}
 
-              {todoRows.length ? (
+              {visibleWeekGroups.length ? (
                 <table className="w-full min-w-[820px] border-separate border-spacing-0 overflow-hidden rounded-[1.3rem] border border-primary/10 text-left">
                   <thead>
                     <tr>
-                      <th className="w-40 border-b border-r border-primary/10 bg-surface-container-low px-4 py-3 text-xs font-black uppercase tracking-[0.14em] text-outline">
-                        Ngày
-                      </th>
                       <th className="w-56 border-b border-r border-primary/10 bg-surface-container-low px-4 py-3 text-xs font-black uppercase tracking-[0.14em] text-outline">
                         Người phụ trách
                       </th>
@@ -317,64 +391,107 @@ export function WorkspaceTodoCard({
                       </th>
                     </tr>
                   </thead>
-                  <tbody>
-                    {todoRows.map((row) => (
-                      <tr key={row.key} className="align-top">
-                        <td className="border-b border-r border-primary/10 bg-white px-4 py-4 text-sm font-black text-on-surface">
-                          {formatWorkDate(row.date)}
-                        </td>
-                        <td className="border-b border-r border-primary/10 bg-white px-4 py-4">
-                          <span className="inline-flex rounded-full bg-surface-container-low px-3 py-1 text-sm font-black text-on-surface">
-                            {row.assigneeName}
-                          </span>
-                        </td>
-                        <td className="border-b border-primary/10 bg-white px-4 py-4">
-                          <div className="space-y-2">
-                            {row.items.map((todo) => (
-                              <div key={todo.id} className="group/item flex items-start gap-2">
-                                <button
-                                  type="button"
-                                  onClick={() => handleToggleTodo(todo)}
-                                  disabled={!canManage || busyId === todo.id}
-                                  className="mt-0.5 text-primary disabled:opacity-50"
-                                  aria-label={todo.done ? "Bỏ hoàn thành" : "Đánh dấu hoàn thành"}
-                                >
-                                  {todo.done ? <CheckCircle2 className="h-4 w-4" /> : <Circle className="h-4 w-4" />}
-                                </button>
-                                <div className="min-w-0 flex-1">
-                                  <p className={`text-sm font-semibold leading-5 ${todo.done ? "text-on-surface-variant line-through" : "text-on-surface"}`}>
-                                    {todo.title}
-                                  </p>
-                                  {todo.description ? (
-                                    <p className="mt-0.5 text-xs font-medium leading-5 text-on-surface-variant">{todo.description}</p>
-                                  ) : null}
-                                </div>
-                                {canManage ? (
-                                  <button
-                                    type="button"
-                                    onClick={() => handleDeleteTodo(todo.id)}
-                                    disabled={busyId === todo.id}
-                                    className="opacity-0 text-outline transition hover:text-rose-600 disabled:opacity-40 group-hover/item:opacity-100"
-                                    aria-label="Xóa việc"
-                                  >
-                                    <Trash2 className="h-3.5 w-3.5" />
-                                  </button>
-                                ) : null}
-                              </div>
+                  {visibleWeekGroups.map((group) => {
+                    const collapsed = collapsedWeeks.includes(group.week);
+
+                    return (
+                      <tbody key={group.week}>
+                        <tr>
+                          <td colSpan={2} className="border-b border-primary/10 bg-primary-fixed/45 p-0">
+                            <button
+                              type="button"
+                              onClick={() => toggleWeekGroup(group.week)}
+                              className="flex w-full items-center justify-between gap-4 px-4 py-3 text-left transition hover:bg-white/45"
+                            >
+                              <span className="flex items-center gap-3">
+                                <span className="inline-flex h-8 w-8 items-center justify-center rounded-full bg-white text-primary shadow-[0_8px_20px_rgba(15,23,42,0.08)]">
+                                  {collapsed ? (
+                                    <ChevronRight className="h-4 w-4" />
+                                  ) : (
+                                    <ChevronDown className="h-4 w-4" />
+                                  )}
+                                </span>
+                                <span className="text-sm font-black text-on-surface">Tuần {group.week}</span>
+                                <span className="rounded-full bg-white px-3 py-1 text-xs font-black text-outline">
+                                  {group.done}/{group.total} đã xong
+                                </span>
+                              </span>
+                              <span className="text-xs font-black uppercase tracking-[0.14em] text-outline">
+                                {collapsed ? "Mở nhóm" : "Thu nhóm"}
+                              </span>
+                            </button>
+                          </td>
+                        </tr>
+                        {collapsed
+                          ? null
+                          : group.rows.map((row) => (
+                              <tr key={row.key} className="align-top">
+                                <td className="border-b border-r border-primary/10 bg-white px-4 py-4">
+                                  <span className="inline-flex rounded-full bg-surface-container-low px-3 py-1 text-sm font-black text-on-surface">
+                                    {row.assigneeName}
+                                  </span>
+                                </td>
+                                <td className="border-b border-primary/10 bg-white px-4 py-4">
+                                  <div className="space-y-2">
+                                    {row.items.map((todo) => (
+                                      <div key={todo.id} className="group/item flex items-start gap-2">
+                                        <button
+                                          type="button"
+                                          onClick={() => handleToggleTodo(todo)}
+                                          disabled={!canManage || busyId === todo.id}
+                                          className="mt-0.5 text-primary disabled:opacity-50"
+                                          aria-label={todo.done ? "Bỏ hoàn thành" : "Đánh dấu hoàn thành"}
+                                        >
+                                          {todo.done ? (
+                                            <CheckCircle2 className="h-4 w-4" />
+                                          ) : (
+                                            <Circle className="h-4 w-4" />
+                                          )}
+                                        </button>
+                                        <div className="min-w-0 flex-1">
+                                          <p
+                                            className={`text-sm font-semibold leading-5 ${
+                                              todo.done
+                                                ? "text-on-surface-variant line-through"
+                                                : "text-on-surface"
+                                            }`}
+                                          >
+                                            {todo.title}
+                                          </p>
+                                          {todo.description ? (
+                                            <p className="mt-0.5 text-xs font-medium leading-5 text-on-surface-variant">
+                                              {todo.description}
+                                            </p>
+                                          ) : null}
+                                        </div>
+                                        {canManage ? (
+                                          <button
+                                            type="button"
+                                            onClick={() => handleDeleteTodo(todo.id)}
+                                            disabled={busyId === todo.id}
+                                            className="opacity-0 text-outline transition hover:text-rose-600 disabled:opacity-40 group-hover/item:opacity-100"
+                                            aria-label="Xóa việc"
+                                          >
+                                            <Trash2 className="h-3.5 w-3.5" />
+                                          </button>
+                                        ) : null}
+                                      </div>
+                                    ))}
+                                  </div>
+                                </td>
+                              </tr>
                             ))}
-                          </div>
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
+                      </tbody>
+                    );
+                  })}
                 </table>
               ) : (
                 <div className="rounded-[1.5rem] border border-dashed border-primary/20 bg-white px-5 py-8 text-center">
                   <ClipboardList className="mx-auto h-8 w-8 text-primary" />
                   <p className="mt-3 text-sm font-bold text-on-surface">
-                    {todos.length && hideCompleted
-                      ? "Tất cả công việc đã hoàn thành đang được ẩn."
-                      : "Chưa có báo cáo công việc nào."}
+                    {selectedMonthTodos.length && hideCompleted
+                      ? "Tất cả công việc trong tháng này đã hoàn thành và đang được ẩn."
+                      : "Chưa có báo cáo công việc trong tháng này."}
                   </p>
                   {canManage ? (
                     <Button type="button" onClick={openCreateDialog} className="mt-4 gap-2">
@@ -417,11 +534,23 @@ export function WorkspaceTodoCard({
 
             <div className="mt-5 space-y-3">
               <Input
-                type="date"
-                value={workDate}
-                onChange={(event) => setWorkDate(event.target.value)}
+                type="month"
+                value={workMonth}
+                onChange={(event) => setWorkMonth(event.target.value || currentMonth)}
                 disabled={!canManage || busyId === "create"}
               />
+              <select
+                value={workWeek}
+                onChange={(event) => setWorkWeek(Number(event.target.value))}
+                disabled={!canManage || busyId === "create"}
+                className="field"
+              >
+                {weekOptions.map((week) => (
+                  <option key={week} value={week}>
+                    Tuần {week}
+                  </option>
+                ))}
+              </select>
               <select
                 value={assignedToId}
                 onChange={(event) => setAssignedToId(event.target.value)}
@@ -462,7 +591,7 @@ export function WorkspaceTodoCard({
               <Button type="button" variant="ghost" onClick={closeCreateDialog} disabled={busyId === "create"}>
                 Hủy
               </Button>
-              <Button type="submit" className="gap-2" disabled={!canManage || !workDate || !assignedToId || !title.trim() || busyId === "create"}>
+              <Button type="submit" className="gap-2" disabled={!canManage || !workMonth || !workWeek || !assignedToId || !title.trim() || busyId === "create"}>
                 <Plus className="h-4 w-4" />
                 Thêm việc
               </Button>

@@ -103,6 +103,8 @@ export type WorkspaceTodo = {
   workspaceId: string;
   assignedToId?: string | null;
   workDate?: string | null;
+  workMonth?: string | null;
+  workWeek?: number | null;
   title: string;
   description?: string | null;
   done: boolean;

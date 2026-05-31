@@ -11,6 +11,8 @@ const todoUpdateSchema = z
     description: z.string().trim().optional(),
     assignedToId: z.string().trim().nullable().optional(),
     workDate: z.string().trim().regex(/^\d{4}-\d{2}-\d{2}$/, "Vui lòng chọn ngày hợp lệ.").optional(),
+    workMonth: z.string().trim().regex(/^\d{4}-\d{2}$/, "Vui lòng chọn tháng hợp lệ.").optional(),
+    workWeek: z.coerce.number().int().min(1, "Vui lòng chọn tuần hợp lệ.").max(6, "Vui lòng chọn tuần hợp lệ.").optional(),
     done: z.boolean().optional(),
   })
   .refine((value) => Object.keys(value).length > 0, {
@@ -86,6 +88,8 @@ export async function PATCH(
         ? { assignedToId: parsed.data.assignedToId || null }
         : {}),
       ...(parsed.data.workDate !== undefined ? { workDate: parsed.data.workDate } : {}),
+      ...(parsed.data.workMonth !== undefined ? { workMonth: parsed.data.workMonth } : {}),
+      ...(parsed.data.workWeek !== undefined ? { workWeek: parsed.data.workWeek } : {}),
       ...(parsed.data.done !== undefined ? { done: parsed.data.done } : {}),
     },
   });
