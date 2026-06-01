@@ -27,6 +27,7 @@ import {
   CheckCircle2,
   ClipboardCheck,
   Eye,
+  EyeOff,
   FilterX,
   GripVertical,
   Maximize2,
@@ -313,14 +314,9 @@ function needsInterviewDetails(status: CandidateStatusType) {
 }
 
 function canEditCandidate(
-  candidate: CandidateListItem,
-  currentUserId: string,
   membershipRole: WorkspaceRoleType,
 ) {
-  return (
-    membershipRole === "HR_ADMIN" ||
-    (membershipRole === "HR" && candidate.hrId === currentUserId)
-  );
+  return membershipRole === "HR_ADMIN" || membershipRole === "HR";
 }
 
 function canReviewCandidate(membershipRole: WorkspaceRoleType) {
@@ -351,13 +347,11 @@ function getTime(value: Date | string | null | undefined) {
 
 export function CandidatesListManager({
   workspaceId,
-  currentUserId,
   membershipRole,
   candidates,
   noHireReasonOptions,
 }: {
   workspaceId: string;
-  currentUserId: string;
   membershipRole: WorkspaceRoleType;
   candidates: CandidateListItem[];
   noHireReasonOptions: WorkspaceDropdownOption[];
@@ -651,7 +645,6 @@ export function CandidatesListManager({
         <CandidatesTable
           workspaceId={workspaceId}
           candidates={items}
-          currentUserId={currentUserId}
           membershipRole={membershipRole}
           messages={messages}
           onEditStatus={(candidateId) =>
@@ -732,7 +725,6 @@ function MetricCard({
 function CandidatesTable({
   workspaceId,
   candidates,
-  currentUserId,
   membershipRole,
   messages,
   onEditStatus,
@@ -740,7 +732,6 @@ function CandidatesTable({
 }: {
   workspaceId: string;
   candidates: CandidateListItem[];
-  currentUserId: string;
   membershipRole: WorkspaceRoleType;
   messages: Record<
     string,
@@ -766,6 +757,7 @@ function CandidatesTable({
     [],
   );
   const [settingsOpen, setSettingsOpen] = useState(false);
+  const [statusSettingsOpen, setStatusSettingsOpen] = useState(false);
   const [isTableFullscreen, setIsTableFullscreen] = useState(false);
   const [groupByStatus, setGroupByStatus] = useState(false);
   const [collapsedStatusGroups, setCollapsedStatusGroups] = useState<
@@ -780,14 +772,12 @@ function CandidatesTable({
     () =>
       buildCandidateColumns({
         workspaceId,
-        currentUserId,
         membershipRole,
         messages,
         onEditStatus,
         onReview,
       }),
     [
-      currentUserId,
       membershipRole,
       messages,
       onEditStatus,
@@ -949,7 +939,6 @@ function CandidatesTable({
     setColumnOrder(defaultCandidateColumnOrder);
     setColumnVisibility(defaultColumnVisibility);
     setColumnPinning(defaultColumnPinning);
-    setHiddenStatuses([]);
   }
 
   function toggleHiddenStatus(status: CandidateStatusType) {
@@ -958,6 +947,14 @@ function CandidatesTable({
         ? current.filter((item) => item !== status)
         : [...current, status],
     );
+  }
+
+  function selectAllHiddenStatuses() {
+    setHiddenStatuses([...CANDIDATE_STATUSES]);
+  }
+
+  function clearHiddenStatuses() {
+    setHiddenStatuses([]);
   }
 
   function toggleStatusGroup(status: CandidateStatusType) {
@@ -1015,12 +1012,14 @@ function CandidatesTable({
   }
 
   useEffect(() => {
-    if (!settingsOpen && !isTableFullscreen) return;
+    if (!settingsOpen && !statusSettingsOpen && !isTableFullscreen) return;
 
     function handleKeyDown(event: KeyboardEvent) {
       if (event.key === "Escape") {
         if (settingsOpen) {
           setSettingsOpen(false);
+        } else if (statusSettingsOpen) {
+          setStatusSettingsOpen(false);
         } else {
           setIsTableFullscreen(false);
         }
@@ -1029,7 +1028,7 @@ function CandidatesTable({
 
     window.addEventListener("keydown", handleKeyDown);
     return () => window.removeEventListener("keydown", handleKeyDown);
-  }, [isTableFullscreen, settingsOpen]);
+  }, [isTableFullscreen, settingsOpen, statusSettingsOpen]);
 
   useEffect(() => {
     if (!isTableFullscreen) return;
@@ -1124,6 +1123,19 @@ function CandidatesTable({
           >
             <Table2 className="size-4" />
             {groupByStatus ? "Đang gom trạng thái" : "Gom trạng thái"}
+          </Button>
+          <Button
+            variant="ghost"
+            className="h-10 gap-2 bg-white px-4"
+            onClick={() => setStatusSettingsOpen(true)}
+          >
+            <EyeOff className="size-4" />
+            Ẩn trạng thái
+            {hiddenStatuses.length ? (
+              <span className="rounded-full bg-primary px-2 py-0.5 text-[10px] font-black text-white">
+                {hiddenStatuses.length}
+              </span>
+            ) : null}
           </Button>
           <Button
             variant="ghost"
@@ -1325,15 +1337,24 @@ function CandidatesTable({
             <div className="overflow-y-auto">
               <ColumnSettingsPanel
                 columns={orderedColumns}
-                hiddenStatuses={hiddenStatuses}
                 onReorderColumn={reorderColumn}
                 onMoveColumn={moveColumn}
-                onToggleHiddenStatus={toggleHiddenStatus}
                 onReset={resetColumnLayout}
               />
             </div>
           </div>
         </div>
+  ) : null;
+
+  const statusSettingsDialog = statusSettingsOpen ? (
+        <StatusVisibilityDialog
+          hiddenStatuses={hiddenStatuses}
+          tableSettingsStatus={tableSettingsStatus}
+          onClose={() => setStatusSettingsOpen(false)}
+          onToggleHiddenStatus={toggleHiddenStatus}
+          onSelectAll={selectAllHiddenStatuses}
+          onClearAll={clearHiddenStatuses}
+        />
   ) : null;
 
   return (
@@ -1350,20 +1371,21 @@ function CandidatesTable({
       {settingsDialog && portalReady
         ? createPortal(settingsDialog, document.body)
         : settingsDialog}
+      {statusSettingsDialog && portalReady
+        ? createPortal(statusSettingsDialog, document.body)
+        : statusSettingsDialog}
     </>
   );
 }
 
 function buildCandidateColumns({
   workspaceId,
-  currentUserId,
   membershipRole,
   messages,
   onEditStatus,
   onReview,
 }: {
   workspaceId: string;
-  currentUserId: string;
   membershipRole: WorkspaceRoleType;
   messages: Record<
     string,
@@ -1591,11 +1613,7 @@ function buildCandidateColumns({
       enableSorting: false,
       cell: ({ row }) => {
         const candidate = row.original;
-        const editable = canEditCandidate(
-          candidate,
-          currentUserId,
-          membershipRole,
-        );
+        const editable = canEditCandidate(membershipRole);
         const reviewable = canReviewCandidate(membershipRole);
         const status = normalizeCandidateStatus(candidate.status);
         const editableStatus = Boolean(getNextHrStatuses(status).length);
@@ -1736,19 +1754,162 @@ function ColumnFilter({
   );
 }
 
+function StatusVisibilityDialog({
+  hiddenStatuses,
+  tableSettingsStatus,
+  onClose,
+  onToggleHiddenStatus,
+  onSelectAll,
+  onClearAll,
+}: {
+  hiddenStatuses: CandidateStatusType[];
+  tableSettingsStatus: TableSettingsStatus;
+  onClose: () => void;
+  onToggleHiddenStatus: (status: CandidateStatusType) => void;
+  onSelectAll: () => void;
+  onClearAll: () => void;
+}) {
+  const allStatusesSelected =
+    hiddenStatuses.length === CANDIDATE_STATUSES.length;
+  const statusText = getTableSettingsStatusText(tableSettingsStatus);
+
+  return (
+    <div
+      className="fixed inset-0 z-[70] flex items-center justify-center bg-slate-950/35 px-4 py-6 backdrop-blur-sm"
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="candidate-status-visibility-title"
+      onMouseDown={(event) => {
+        if (event.target === event.currentTarget) {
+          onClose();
+        }
+      }}
+    >
+      <div className="relative flex max-h-[88vh] w-full max-w-3xl flex-col overflow-hidden rounded-[1.8rem] border border-white/75 bg-white shadow-[0_30px_90px_rgba(15,23,42,0.28)]">
+        <div className="flex flex-col gap-4 border-b border-primary/10 bg-[linear-gradient(135deg,rgba(255,231,237,0.78),rgba(255,255,255,0.97))] px-5 py-4 sm:flex-row sm:items-start sm:justify-between">
+          <div>
+            <p
+              id="candidate-status-visibility-title"
+              className="text-lg font-black text-on-surface"
+            >
+              Ẩn trạng thái khỏi bảng Excel
+            </p>
+            <p className="mt-1 text-sm font-medium leading-6 text-on-surface-variant">
+              Chọn các trạng thái không cần hiển thị trong danh sách CV dạng
+              bảng.
+            </p>
+          </div>
+          <div className="flex items-center gap-2">
+            {statusText ? (
+              <span
+                className={cn(
+                  "rounded-full bg-white/80 px-3 py-2 text-xs font-black uppercase tracking-[0.12em]",
+                  tableSettingsStatus === "error"
+                    ? "text-rose-600"
+                    : "text-outline",
+                )}
+              >
+                {statusText}
+              </span>
+            ) : null}
+            <button
+              type="button"
+              onClick={onClose}
+              className="inline-flex size-10 items-center justify-center rounded-full bg-white text-on-surface transition hover:bg-primary-container/70 hover:text-primary"
+              aria-label="Đóng cài đặt ẩn trạng thái"
+            >
+              <X className="size-5" />
+            </button>
+          </div>
+        </div>
+
+        <div className="overflow-y-auto px-5 py-5">
+          <div className="flex flex-col gap-3 rounded-[1.4rem] border border-primary/10 bg-surface-container-low p-4 sm:flex-row sm:items-center sm:justify-between">
+            <div>
+              <p className="text-sm font-black text-on-surface">
+                {hiddenStatuses.length
+                  ? `Đang ẩn ${hiddenStatuses.length} trạng thái`
+                  : "Chưa ẩn trạng thái nào"}
+              </p>
+              <p className="mt-1 text-sm font-medium leading-6 text-on-surface-variant">
+                Cài đặt này được lưu riêng theo từng tài khoản.
+              </p>
+            </div>
+            <div className="flex flex-wrap gap-2">
+              <Button
+                variant="ghost"
+                className="h-10 bg-white px-4"
+                onClick={onSelectAll}
+                disabled={allStatusesSelected}
+              >
+                Chọn tất cả
+              </Button>
+              <Button
+                variant="ghost"
+                className="h-10 bg-white px-4"
+                onClick={onClearAll}
+                disabled={!hiddenStatuses.length}
+              >
+                Bỏ tất cả
+              </Button>
+            </div>
+          </div>
+
+          <div className="mt-4 grid gap-2 sm:grid-cols-2">
+            {CANDIDATE_STATUSES.map((status) => {
+              const meta = candidateStatusMeta[status];
+              const hidden = hiddenStatuses.includes(status);
+
+              return (
+                <label
+                  key={status}
+                  className={cn(
+                    "flex cursor-pointer items-center justify-between gap-3 rounded-[1rem] border px-3 py-3 transition",
+                    hidden
+                      ? "border-primary/30 bg-white shadow-[0_10px_24px_rgba(160,57,100,0.08)]"
+                      : "border-white/70 bg-white/65 hover:bg-white",
+                  )}
+                >
+                  <span className="flex min-w-0 items-center gap-2">
+                    <input
+                      type="checkbox"
+                      checked={hidden}
+                      onChange={() => onToggleHiddenStatus(status)}
+                      className="size-4 accent-primary"
+                    />
+                    <span className="truncate text-sm font-black text-on-surface">
+                      {meta.label}
+                    </span>
+                  </span>
+                  <span
+                    className={cn(
+                      "rounded-full px-2.5 py-1 text-[10px] font-black uppercase tracking-[0.08em]",
+                      hidden
+                        ? "bg-primary text-white"
+                        : "bg-surface-container-high text-outline",
+                    )}
+                  >
+                    {hidden ? "Ẩn" : "Hiện"}
+                  </span>
+                </label>
+              );
+            })}
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 function ColumnSettingsPanel({
   columns,
-  hiddenStatuses,
   onReorderColumn,
   onMoveColumn,
-  onToggleHiddenStatus,
   onReset,
 }: {
   columns: Column<CandidateListItem, unknown>[];
-  hiddenStatuses: CandidateStatusType[];
   onReorderColumn: (draggedColumnId: string, targetColumnId: string) => void;
   onMoveColumn: (columnId: string, direction: -1 | 1) => void;
-  onToggleHiddenStatus: (status: CandidateStatusType) => void;
   onReset: () => void;
 }) {
   const [draggingColumnId, setDraggingColumnId] = useState<string | null>(null);
@@ -1776,66 +1937,7 @@ function ColumnSettingsPanel({
         </Button>
       </div>
 
-      <div className="mt-5 rounded-[1.4rem] border border-primary/10 bg-surface-container-low p-4">
-        <div className="flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">
-          <div>
-            <p className="text-sm font-black text-on-surface">
-              Ẩn trạng thái khỏi bảng Excel
-            </p>
-            <p className="mt-1 text-sm font-medium leading-6 text-on-surface-variant">
-              Các trạng thái được chọn sẽ không xuất hiện trong danh sách bảng.
-            </p>
-          </div>
-          {hiddenStatuses.length ? (
-            <p className="text-xs font-black uppercase tracking-[0.14em] text-primary">
-              Đang ẩn {hiddenStatuses.length} trạng thái
-            </p>
-          ) : null}
-        </div>
-
-        <div className="mt-4 grid gap-2 sm:grid-cols-2 xl:grid-cols-3">
-          {CANDIDATE_STATUSES.map((status) => {
-            const meta = candidateStatusMeta[status];
-            const hidden = hiddenStatuses.includes(status);
-
-            return (
-              <label
-                key={status}
-                className={cn(
-                  "flex cursor-pointer items-center justify-between gap-3 rounded-[1rem] border px-3 py-2 transition",
-                  hidden
-                    ? "border-primary/30 bg-white shadow-[0_10px_24px_rgba(160,57,100,0.08)]"
-                    : "border-white/70 bg-white/65 hover:bg-white",
-                )}
-              >
-                <span className="flex min-w-0 items-center gap-2">
-                  <input
-                    type="checkbox"
-                    checked={hidden}
-                    onChange={() => onToggleHiddenStatus(status)}
-                    className="size-4 accent-primary"
-                  />
-                  <span className="truncate text-sm font-black text-on-surface">
-                    {meta.label}
-                  </span>
-                </span>
-                <span
-                  className={cn(
-                    "rounded-full px-2.5 py-1 text-[10px] font-black uppercase tracking-[0.08em]",
-                    hidden
-                      ? "bg-primary text-white"
-                      : "bg-surface-container-high text-outline",
-                  )}
-                >
-                  {hidden ? "Ẩn" : "Hiện"}
-                </span>
-              </label>
-            );
-          })}
-        </div>
-      </div>
-
-      <div className="mt-4 grid gap-3 md:grid-cols-2 xl:grid-cols-3">
+      <div className="mt-5 grid gap-3 md:grid-cols-2 xl:grid-cols-3">
         {columns.map((column, index) => {
           const id = column.id as CandidateColumnId;
           const pinned = column.getIsPinned();

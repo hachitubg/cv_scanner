@@ -26,12 +26,12 @@ export function isWorkspaceManagerOrAdmin(membershipRole: WorkspaceRoleType, rol
 }
 
 export function canEditWorkspaceCandidate(
-  candidateHrId: string,
-  userId: string,
+  _candidateHrId: string,
+  _userId: string,
   membershipRole: WorkspaceRoleType,
   role: RoleType,
 ) {
-  return role === "ADMIN" || membershipRole === "HR_ADMIN" || (membershipRole === "HR" && candidateHrId === userId);
+  return role === "ADMIN" || membershipRole === "HR_ADMIN" || membershipRole === "HR";
 }
 
 export function canAssignCandidateToHr(

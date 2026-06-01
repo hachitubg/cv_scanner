@@ -97,7 +97,6 @@ export default async function CandidatesPage({
 
       <CandidatesListManager
         workspaceId={workspaceId}
-        currentUserId={session.user.id}
         membershipRole={membership!.membershipRole}
         candidates={candidates.map((candidate) => ({
           id: candidate.id,
