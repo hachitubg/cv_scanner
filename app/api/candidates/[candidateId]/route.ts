@@ -6,7 +6,6 @@ import {
   canAssignCandidateToHr,
   canEditWorkspaceCandidate,
   canManageCandidate,
-  canManagerUpdateCandidateStatus,
   isManagerMembership,
   isWorkspaceManagerOrAdmin,
   requireWorkspaceHrAdmin,
@@ -14,14 +13,12 @@ import {
 import { prisma } from "@/lib/prisma";
 import {
   normalizeCandidateStatus,
-  candidateStatusTransitions,
   stringifySkills,
   toBirthYear,
 } from "@/lib/utils";
 import {
   CANDIDATE_STATUSES,
   MANAGER_DECISIONS,
-  type CandidateStatusType,
 } from "@/types";
 
 const candidateUpdateSchema = z.object({
@@ -61,32 +58,13 @@ const managerEditableKeys = new Set([
   "managerReviewNote",
   "status",
   "statusNote",
+  "interviewDate",
+  "interviewerName",
+  "noHireReason",
 ]);
 
 function requiresInterviewDetails(status: string) {
   return status === "INTERVIEW";
-}
-
-function canTransitionStatus({
-  currentStatus,
-  nextStatus,
-  isManagerSession,
-  membershipRole,
-  role,
-}: {
-  currentStatus: CandidateStatusType;
-  nextStatus?: CandidateStatusType;
-  isManagerSession: boolean;
-  membershipRole: string;
-  role: string;
-}) {
-  if (!nextStatus || nextStatus === currentStatus) return true;
-  if (role === "ADMIN") return true;
-  if (isManagerSession) {
-    return currentStatus === "OFFER" && nextStatus === "HIRE";
-  }
-
-  return candidateStatusTransitions[currentStatus].includes(nextStatus);
 }
 
 async function ensureProjectInWorkspace(
@@ -322,37 +300,6 @@ export async function PATCH(
   }
 
   const nextStatus = parsed.data.status;
-  if (
-    !canManagerUpdateCandidateStatus(
-      nextStatus,
-      membership.membershipRole,
-      session.user.role,
-    )
-  ) {
-    return NextResponse.json(
-      {
-        error:
-          "Sếp chỉ được chuyển ứng viên từ Offer sang Đã tuyển.",
-      },
-      { status: 403 },
-    );
-  }
-
-  if (
-    !canTransitionStatus({
-      currentStatus,
-      nextStatus,
-      isManagerSession,
-      membershipRole: membership.membershipRole,
-      role: session.user.role,
-    })
-  ) {
-    return NextResponse.json(
-      { error: "Trạng thái chuyển tiếp không hợp lệ theo luồng tuyển dụng." },
-      { status: 400 },
-    );
-  }
-
   const resolvedStatus = nextStatus ?? currentStatus;
   const nextInterviewDate =
     parsed.data.interviewDate ?? currentCandidate.interviewDate ?? "";
@@ -403,7 +350,10 @@ export async function PATCH(
 
   let hrId = currentCandidate.hrId;
   if (parsed.data.hrId !== undefined) {
+    const isChangingHr = parsed.data.hrId !== currentCandidate.hrId;
+
     if (
+      isChangingHr &&
       !canAssignCandidateToHr(
         parsed.data.hrId,
         session.user.id,

@@ -3,11 +3,12 @@ import { vi } from "date-fns/locale";
 import { clsx, type ClassValue } from "clsx";
 import { twMerge } from "tailwind-merge";
 
-import type {
-  CandidateStatusType,
-  ManagerDecisionType,
-  ManagerFinalStatusType,
-  WorkspaceRoleType,
+import {
+  CANDIDATE_STATUSES,
+  type CandidateStatusType,
+  type ManagerDecisionType,
+  type ManagerFinalStatusType,
+  type WorkspaceRoleType,
 } from "@/types";
 
 export function cn(...inputs: ClassValue[]) {
@@ -89,32 +90,11 @@ export const candidateStatusMeta: Record<
   },
 };
 
-export const candidateStatusTransitions: Record<
-  CandidateStatusType,
-  CandidateStatusType[]
-> = {
-  NEW: ["INTERVIEW", "NO_HIRE"],
-  INTERVIEW: ["OFFER", "NO_HIRE"],
-  OFFER: [],
-  HIRE: ["ONBOARDED", "NO_HIRE"],
-  ONBOARDED: ["PERMANENT", "NO_HIRE"],
-  PERMANENT: [],
-  NO_HIRE: [],
-};
-
 export function getCandidateStatusOptions(
-  currentStatus: string,
-  actor: "hr" | "manager",
+  _currentStatus: string,
+  _actor: "hr" | "manager",
 ) {
-  const normalizedStatus = normalizeCandidateStatus(currentStatus);
-  const nextStatuses =
-    actor === "manager"
-      ? normalizedStatus === "OFFER"
-        ? ["HIRE" as const]
-        : []
-      : candidateStatusTransitions[normalizedStatus];
-
-  return [normalizedStatus, ...nextStatuses].filter(
+  return CANDIDATE_STATUSES.filter(
     (status, index, statuses) => statuses.indexOf(status) === index,
   );
 }

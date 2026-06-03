@@ -1,9 +1,5 @@
 import { prisma } from "@/lib/prisma";
-import type { CandidateStatusType, RoleType, WorkspaceRoleType } from "@/types";
-
-export const MANAGER_ALLOWED_FINAL_STATUSES: CandidateStatusType[] = [
-  "HIRE",
-];
+import type { RoleType, WorkspaceRoleType } from "@/types";
 
 export function isManagerMembership(role?: WorkspaceRoleType) {
   return role === "MANAGER";
@@ -41,17 +37,6 @@ export function canAssignCandidateToHr(
   role: RoleType,
 ) {
   return role === "ADMIN" || membershipRole === "HR_ADMIN" || (membershipRole === "HR" && targetHrId === userId);
-}
-
-export function canManagerUpdateCandidateStatus(
-  nextStatus: string | undefined,
-  membershipRole: WorkspaceRoleType,
-  role: RoleType,
-) {
-  if (!nextStatus) return true;
-  if (role === "ADMIN" || membershipRole === "HR_ADMIN") return true;
-  if (membershipRole !== "MANAGER") return false;
-  return MANAGER_ALLOWED_FINAL_STATUSES.includes(nextStatus as CandidateStatusType);
 }
 
 export async function getWorkspaceMembership(workspaceId: string, userId: string, role: RoleType) {

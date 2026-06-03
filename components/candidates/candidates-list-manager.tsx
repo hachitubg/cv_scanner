@@ -316,7 +316,11 @@ function needsInterviewDetails(status: CandidateStatusType) {
 function canEditCandidate(
   membershipRole: WorkspaceRoleType,
 ) {
-  return membershipRole === "HR_ADMIN" || membershipRole === "HR";
+  return (
+    membershipRole === "HR_ADMIN" ||
+    membershipRole === "HR" ||
+    membershipRole === "MANAGER"
+  );
 }
 
 function canReviewCandidate(membershipRole: WorkspaceRoleType) {

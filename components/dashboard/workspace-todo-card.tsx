@@ -8,8 +8,11 @@ import {
   Circle,
   ClipboardList,
   EyeOff,
+  Pencil,
   Plus,
+  Save,
   Trash2,
+  Undo2,
   X,
 } from "lucide-react";
 
@@ -104,6 +107,12 @@ export function WorkspaceTodoCard({
   const [assignedToId, setAssignedToId] = useState(hrMembers[0]?.id ?? "");
   const [title, setTitle] = useState("");
   const [description, setDescription] = useState("");
+  const [editingTodoId, setEditingTodoId] = useState<string | null>(null);
+  const [editWorkMonth, setEditWorkMonth] = useState(currentMonth);
+  const [editWorkWeek, setEditWorkWeek] = useState(currentWeek);
+  const [editAssignedToId, setEditAssignedToId] = useState("");
+  const [editTitle, setEditTitle] = useState("");
+  const [editDescription, setEditDescription] = useState("");
   const [error, setError] = useState("");
   const [busyId, setBusyId] = useState<string | null>(null);
 
@@ -119,46 +128,24 @@ export function WorkspaceTodoCard({
     [selectedMonth, todos],
   );
   const visibleWeekGroups = useMemo(() => {
-    const assigneeGroups = new Map<string, WorkspaceTodo[]>();
+    const weekGroups = new Map<number, WorkspaceTodo[]>();
 
     sortTodos(selectedMonthTodos).forEach((todo) => {
       if (hideCompleted && todo.done) return;
 
-      const key = `${getTodoWeek(todo)}::${todo.assignedToId || "__unassigned"}`;
-      assigneeGroups.set(key, [...(assigneeGroups.get(key) ?? []), todo]);
+      const week = getTodoWeek(todo);
+      weekGroups.set(week, [...(weekGroups.get(week) ?? []), todo]);
     });
 
-    const rows = Array.from(assigneeGroups.entries())
-      .map(([key, items]) => {
-        const [week, assigneeId] = key.split("::");
-        return {
-          key,
-          week: Number(week),
-          assigneeName: hrNameById.get(assigneeId) ?? "Chưa phân công",
-          items,
-        };
-      })
-      .sort((left, right) => {
-        const weekDiff = left.week - right.week;
-        if (weekDiff !== 0) return weekDiff;
-        return left.assigneeName.localeCompare(right.assigneeName);
-      });
-
-    const weekGroups = new Map<number, typeof rows>();
-    rows.forEach((row) => {
-      weekGroups.set(row.week, [...(weekGroups.get(row.week) ?? []), row]);
-    });
-
-    return Array.from(weekGroups.entries()).map(([week, weekRows]) => ({
+    return Array.from(weekGroups.entries())
+      .sort(([leftWeek], [rightWeek]) => leftWeek - rightWeek)
+      .map(([week, items]) => ({
       week,
-      rows: weekRows,
-      total: weekRows.reduce((sum, row) => sum + row.items.length, 0),
-      done: weekRows.reduce(
-        (sum, row) => sum + row.items.filter((todo) => todo.done).length,
-        0,
-      ),
+      items,
+      total: items.length,
+      done: items.filter((todo) => todo.done).length,
     }));
-  }, [hideCompleted, hrNameById, selectedMonthTodos]);
+  }, [hideCompleted, selectedMonthTodos]);
 
   function toggleWeekGroup(week: number) {
     setCollapsedWeeks((current) =>
@@ -247,11 +234,77 @@ export function WorkspaceTodoCard({
     }
   };
 
+  function startEditTodo(todo: WorkspaceTodo) {
+    if (!canManage) return;
+    setError("");
+    setEditingTodoId(todo.id);
+    setEditWorkMonth(getTodoMonth(todo));
+    setEditWorkWeek(getTodoWeek(todo));
+    setEditAssignedToId(todo.assignedToId ?? "");
+    setEditTitle(todo.title);
+    setEditDescription(todo.description ?? "");
+  }
+
+  function cancelEditTodo() {
+    setEditingTodoId(null);
+    setEditWorkMonth(currentMonth);
+    setEditWorkWeek(currentWeek);
+    setEditAssignedToId("");
+    setEditTitle("");
+    setEditDescription("");
+  }
+
+  const handleUpdateTodo = async (todo: WorkspaceTodo) => {
+    if (
+      !canManage ||
+      !editingTodoId ||
+      !editWorkMonth ||
+      !editWorkWeek ||
+      !editAssignedToId ||
+      !editTitle.trim()
+    ) {
+      return;
+    }
+
+    setBusyId(todo.id);
+    setError("");
+
+    try {
+      const response = await fetch(`/api/workspaces/${workspaceId}/todos/${todo.id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          workMonth: editWorkMonth,
+          workWeek: editWorkWeek,
+          assignedToId: editAssignedToId,
+          title: editTitle,
+          description: editDescription,
+        }),
+      });
+      const payload = await response.json();
+
+      if (!response.ok) {
+        throw new Error(payload.error || "Không thể cập nhật báo cáo công việc.");
+      }
+
+      setSelectedMonth(editWorkMonth);
+      setTodos((current) => sortTodos(current.map((item) => (item.id === todo.id ? payload : item))));
+      cancelEditTodo();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Không thể cập nhật báo cáo công việc.");
+    } finally {
+      setBusyId(null);
+    }
+  };
+
   const handleDeleteTodo = async (todoId: string) => {
     if (!canManage) return;
 
     const previousTodos = todos;
     setTodos((current) => current.filter((todo) => todo.id !== todoId));
+    if (editingTodoId === todoId) {
+      cancelEditTodo();
+    }
     setBusyId(todoId);
     setError("");
 
@@ -318,7 +371,7 @@ export function WorkspaceTodoCard({
             if (event.target === event.currentTarget) setIsOpen(false);
           }}
         >
-          <div className="max-h-[88vh] w-full max-w-5xl overflow-hidden rounded-[2rem] border border-white/70 bg-white shadow-[0_34px_90px_rgba(70,20,45,0.24)]">
+          <div className="max-h-[88vh] w-full max-w-[92rem] overflow-hidden rounded-[2rem] border border-white/70 bg-white shadow-[0_34px_90px_rgba(70,20,45,0.24)]">
             <div className="flex flex-col gap-4 border-b border-primary/10 bg-[linear-gradient(145deg,rgba(255,239,245,0.95),rgba(255,255,255,0.98))] px-5 py-5 sm:flex-row sm:items-start sm:justify-between sm:px-6">
               <div className="min-w-0">
                 <p className="text-xs font-black uppercase tracking-[0.2em] text-primary">Workspace report</p>
@@ -380,14 +433,20 @@ export function WorkspaceTodoCard({
               ) : null}
 
               {visibleWeekGroups.length ? (
-                <table className="w-full min-w-[820px] border-separate border-spacing-0 overflow-hidden rounded-[1.3rem] border border-primary/10 text-left">
+                <table className="w-full min-w-[1180px] border-separate border-spacing-0 overflow-hidden rounded-[1.3rem] border border-primary/10 text-left">
                   <thead>
                     <tr>
-                      <th className="w-56 border-b border-r border-primary/10 bg-surface-container-low px-4 py-3 text-xs font-black uppercase tracking-[0.14em] text-outline">
+                      <th className="w-52 border-b border-r border-primary/10 bg-surface-container-low px-4 py-3 text-xs font-black uppercase tracking-[0.14em] text-outline">
                         Người phụ trách
                       </th>
-                      <th className="border-b border-primary/10 bg-surface-container-low px-4 py-3 text-xs font-black uppercase tracking-[0.14em] text-outline">
+                      <th className="w-[34%] border-b border-r border-primary/10 bg-surface-container-low px-4 py-3 text-xs font-black uppercase tracking-[0.14em] text-outline">
                         Công việc
+                      </th>
+                      <th className="border-b border-r border-primary/10 bg-surface-container-low px-4 py-3 text-xs font-black uppercase tracking-[0.14em] text-outline">
+                        Ghi chú
+                      </th>
+                      <th className="w-40 border-b border-primary/10 bg-surface-container-low px-4 py-3 text-right text-xs font-black uppercase tracking-[0.14em] text-outline">
+                        Thao tác
                       </th>
                     </tr>
                   </thead>
@@ -397,7 +456,7 @@ export function WorkspaceTodoCard({
                     return (
                       <tbody key={group.week}>
                         <tr>
-                          <td colSpan={2} className="border-b border-primary/10 bg-primary-fixed/45 p-0">
+                          <td colSpan={4} className="border-b border-primary/10 bg-primary-fixed/45 p-0">
                             <button
                               type="button"
                               onClick={() => toggleWeekGroup(group.week)}
@@ -424,21 +483,70 @@ export function WorkspaceTodoCard({
                         </tr>
                         {collapsed
                           ? null
-                          : group.rows.map((row) => (
-                              <tr key={row.key} className="align-top">
-                                <td className="border-b border-r border-primary/10 bg-white px-4 py-4">
-                                  <span className="inline-flex rounded-full bg-surface-container-low px-3 py-1 text-sm font-black text-on-surface">
-                                    {row.assigneeName}
-                                  </span>
-                                </td>
-                                <td className="border-b border-primary/10 bg-white px-4 py-4">
-                                  <div className="space-y-2">
-                                    {row.items.map((todo) => (
-                                      <div key={todo.id} className="group/item flex items-start gap-2">
+                          : group.items.map((todo) => {
+                              const isEditing = editingTodoId === todo.id;
+                              const isBusy = busyId === todo.id;
+
+                              return (
+                                <tr key={todo.id} className="align-top">
+                                  <td className="border-b border-r border-primary/10 bg-white px-4 py-4">
+                                    {isEditing ? (
+                                      <div className="space-y-2">
+                                        <select
+                                          value={editAssignedToId}
+                                          onChange={(event) => setEditAssignedToId(event.target.value)}
+                                          disabled={isBusy}
+                                          className="field h-10 text-sm"
+                                        >
+                                          {hrMembers.map((hr) => (
+                                            <option key={hr.id} value={hr.id}>
+                                              {hr.name}
+                                            </option>
+                                          ))}
+                                        </select>
+                                        <div className="grid grid-cols-[1fr_92px] gap-2">
+                                          <Input
+                                            type="month"
+                                            value={editWorkMonth}
+                                            onChange={(event) => setEditWorkMonth(event.target.value || currentMonth)}
+                                            disabled={isBusy}
+                                            className="h-10 text-sm"
+                                          />
+                                          <select
+                                            value={editWorkWeek}
+                                            onChange={(event) => setEditWorkWeek(Number(event.target.value))}
+                                            disabled={isBusy}
+                                            className="field h-10 text-sm"
+                                          >
+                                            {weekOptions.map((week) => (
+                                              <option key={week} value={week}>
+                                                Tuần {week}
+                                              </option>
+                                            ))}
+                                          </select>
+                                        </div>
+                                      </div>
+                                    ) : (
+                                      <span className="inline-flex rounded-full bg-surface-container-low px-3 py-1 text-sm font-black text-on-surface">
+                                        {hrNameById.get(todo.assignedToId ?? "") ?? "Chưa phân công"}
+                                      </span>
+                                    )}
+                                  </td>
+                                  <td className="border-b border-r border-primary/10 bg-white px-4 py-4">
+                                    {isEditing ? (
+                                      <Input
+                                        value={editTitle}
+                                        onChange={(event) => setEditTitle(event.target.value)}
+                                        disabled={isBusy}
+                                        className="h-10 text-sm font-semibold"
+                                        autoFocus
+                                      />
+                                    ) : (
+                                      <div className="flex items-start gap-2">
                                         <button
                                           type="button"
                                           onClick={() => handleToggleTodo(todo)}
-                                          disabled={!canManage || busyId === todo.id}
+                                          disabled={!canManage || isBusy}
                                           className="mt-0.5 text-primary disabled:opacity-50"
                                           aria-label={todo.done ? "Bỏ hoàn thành" : "Đánh dấu hoàn thành"}
                                         >
@@ -458,29 +566,76 @@ export function WorkspaceTodoCard({
                                           >
                                             {todo.title}
                                           </p>
-                                          {todo.description ? (
-                                            <p className="mt-0.5 text-xs font-medium leading-5 text-on-surface-variant">
-                                              {todo.description}
-                                            </p>
-                                          ) : null}
                                         </div>
-                                        {canManage ? (
+                                      </div>
+                                    )}
+                                  </td>
+                                  <td className="border-b border-r border-primary/10 bg-white px-4 py-4">
+                                    {isEditing ? (
+                                      <Textarea
+                                        value={editDescription}
+                                        onChange={(event) => setEditDescription(event.target.value)}
+                                        disabled={isBusy}
+                                        className="min-h-20 text-sm"
+                                        placeholder="Ghi chú thêm nếu cần..."
+                                      />
+                                    ) : (
+                                      <p className="text-sm font-medium leading-6 text-on-surface-variant">
+                                        {todo.description || "Chưa có ghi chú"}
+                                      </p>
+                                    )}
+                                  </td>
+                                  <td className="border-b border-primary/10 bg-white px-4 py-4">
+                                    <div className="flex justify-end gap-2">
+                                      {canManage && isEditing ? (
+                                        <>
+                                          <button
+                                            type="button"
+                                            onClick={() => handleUpdateTodo(todo)}
+                                            disabled={isBusy || !editTitle.trim() || !editAssignedToId}
+                                            className="inline-flex h-9 w-9 items-center justify-center rounded-full bg-primary text-white transition hover:bg-primary/90 disabled:opacity-50"
+                                            aria-label="Lưu công việc"
+                                          >
+                                            <Save className="h-4 w-4" />
+                                          </button>
+                                          <button
+                                            type="button"
+                                            onClick={cancelEditTodo}
+                                            disabled={isBusy}
+                                            className="inline-flex h-9 w-9 items-center justify-center rounded-full bg-surface-container-low text-on-surface transition hover:bg-primary-container/70 disabled:opacity-50"
+                                            aria-label="Hủy sửa"
+                                          >
+                                            <Undo2 className="h-4 w-4" />
+                                          </button>
+                                        </>
+                                      ) : null}
+                                      {canManage && !isEditing ? (
+                                        <>
+                                          <button
+                                            type="button"
+                                            onClick={() => startEditTodo(todo)}
+                                            disabled={isBusy}
+                                            className="inline-flex h-9 w-9 items-center justify-center rounded-full bg-surface-container-low text-on-surface transition hover:bg-primary-container/70 disabled:opacity-50"
+                                            aria-label="Sửa công việc"
+                                          >
+                                            <Pencil className="h-4 w-4" />
+                                          </button>
                                           <button
                                             type="button"
                                             onClick={() => handleDeleteTodo(todo.id)}
-                                            disabled={busyId === todo.id}
-                                            className="opacity-0 text-outline transition hover:text-rose-600 disabled:opacity-40 group-hover/item:opacity-100"
+                                            disabled={isBusy}
+                                            className="inline-flex h-9 w-9 items-center justify-center rounded-full bg-surface-container-low text-outline transition hover:bg-rose-50 hover:text-rose-600 disabled:opacity-50"
                                             aria-label="Xóa việc"
                                           >
-                                            <Trash2 className="h-3.5 w-3.5" />
+                                            <Trash2 className="h-4 w-4" />
                                           </button>
-                                        ) : null}
-                                      </div>
-                                    ))}
-                                  </div>
-                                </td>
-                              </tr>
-                            ))}
+                                        </>
+                                      ) : null}
+                                    </div>
+                                  </td>
+                                </tr>
+                              );
+                            })}
                       </tbody>
                     );
                   })}
@@ -515,7 +670,7 @@ export function WorkspaceTodoCard({
         >
           <form
             onSubmit={handleCreateTodo}
-            className="w-full max-w-md rounded-[1.7rem] border border-white/70 bg-white p-5 shadow-[0_30px_75px_rgba(70,20,45,0.24)] sm:p-6"
+            className="w-full max-w-xl rounded-[1.7rem] border border-white/70 bg-white p-5 shadow-[0_30px_75px_rgba(70,20,45,0.24)] sm:p-6"
           >
             <div className="flex items-start justify-between gap-4">
               <div>
