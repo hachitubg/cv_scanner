@@ -44,6 +44,7 @@ export default async function CandidatesPage({
       include: {
         hr: true,
         project: true,
+        cvFile: true,
         managerReviewedBy: true,
       },
       orderBy: { updatedAt: "desc" },
@@ -121,6 +122,12 @@ export default async function CandidatesPage({
           managerReviewedAt: candidate.managerReviewedAt,
           managerReviewedByName: candidate.managerReviewedBy?.name ?? null,
           noHireReason: candidate.noHireReason,
+          cvFile: candidate.cvFile
+            ? {
+                fileName: candidate.cvFile.fileName,
+                filePath: candidate.cvFile.filePath,
+              }
+            : null,
           hrId: candidate.hrId,
           hr: {
             name: candidate.hr.name,

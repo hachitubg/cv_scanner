@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { Fragment, useEffect, useMemo, useState, useTransition } from "react";
+import { Fragment, useEffect, useMemo, useRef, useState, useTransition } from "react";
 import { createPortal } from "react-dom";
 import { useRouter } from "next/navigation";
 import {
@@ -17,6 +17,7 @@ import {
   type ColumnPinningState,
   type Row,
   type SortingState,
+  type Table,
   type VisibilityState,
 } from "@tanstack/react-table";
 import {
@@ -28,6 +29,7 @@ import {
   ClipboardCheck,
   Eye,
   EyeOff,
+  FileText,
   FilterX,
   GripVertical,
   Maximize2,
@@ -86,6 +88,10 @@ type CandidateListItem = {
   managerReviewedAt: Date | string | null;
   managerReviewedByName: string | null;
   noHireReason: string | null;
+  cvFile: {
+    fileName: string;
+    filePath: string | null;
+  } | null;
   hrId: string;
   hr: {
     name: string;
@@ -139,6 +145,7 @@ type CandidateTableColumnSettings = {
 type TableSettingsStatus = "loading" | "idle" | "saving" | "saved" | "error";
 
 const CANDIDATE_TABLE_SETTINGS_KEY = "candidates-table-columns";
+const CANDIDATE_TABLE_FILTERS_STORAGE_PREFIX = "candidates-table-filters";
 
 const INTERVIEW_REQUIRED_STATUSES: CandidateStatusType[] = ["INTERVIEW"];
 
@@ -179,6 +186,24 @@ const candidateColumnLabels: Record<CandidateColumnId, string> = {
 const defaultCandidateColumnOrder: CandidateColumnId[] = [
   "candidate",
   "status",
+  "position",
+  "contact",
+  "hr",
+  "project",
+  "createdAt",
+  "updatedAt",
+  "interview",
+  "managerDecision",
+  "expectedSalary",
+  "managerOfferSalary",
+  "source",
+  "cvInfo",
+  "actions",
+];
+
+const legacyDefaultCandidateColumnOrder: CandidateColumnId[] = [
+  "candidate",
+  "status",
   "contact",
   "position",
   "hr",
@@ -206,6 +231,14 @@ const defaultColumnPinning: ColumnPinningState = {
 
 const candidateColumnIdSet = new Set<string>(defaultCandidateColumnOrder);
 const candidateStatusSet = new Set<string>(CANDIDATE_STATUSES);
+const multiSelectFilterColumnIds = new Set<string>([
+  "status",
+  "position",
+  "hr",
+  "project",
+  "source",
+  "managerDecision",
+]);
 
 function isCandidateColumnId(value: unknown): value is CandidateColumnId {
   return typeof value === "string" && candidateColumnIdSet.has(value);
@@ -217,6 +250,13 @@ function isCandidateStatus(value: unknown): value is CandidateStatusType {
 
 function normalizeColumnOrder(value: unknown): ColumnOrderState {
   if (!Array.isArray(value)) return defaultCandidateColumnOrder;
+
+  if (
+    value.length === legacyDefaultCandidateColumnOrder.length &&
+    value.every((columnId, index) => columnId === legacyDefaultCandidateColumnOrder[index])
+  ) {
+    return defaultCandidateColumnOrder;
+  }
 
   const seen = new Set<string>();
   const ordered = value.filter((columnId): columnId is CandidateColumnId => {
@@ -281,6 +321,65 @@ function normalizeHiddenStatuses(value: unknown): CandidateStatusType[] {
   });
 }
 
+function normalizeColumnFilters(value: unknown): ColumnFiltersState {
+  if (!Array.isArray(value)) return [];
+
+  const filters: ColumnFiltersState = [];
+
+  value.forEach((filter) => {
+    if (!filter || typeof filter !== "object" || Array.isArray(filter)) {
+      return;
+    }
+
+    const entry = filter as { id?: unknown; value?: unknown };
+    if (!isCandidateColumnId(entry.id)) return;
+
+    if (multiSelectFilterColumnIds.has(entry.id)) {
+      const values = Array.isArray(entry.value)
+        ? entry.value
+        : entry.value
+          ? [entry.value]
+          : [];
+      const normalizedValues = values
+        .map((item) => String(item))
+        .filter(Boolean);
+
+      if (normalizedValues.length) {
+        filters.push({ id: entry.id, value: normalizedValues });
+      }
+      return;
+    }
+
+    const keyword = Array.isArray(entry.value)
+      ? String(entry.value[0] ?? "").trim()
+      : String(entry.value ?? "").trim();
+    if (keyword) {
+      filters.push({ id: entry.id, value: keyword });
+    }
+  });
+
+  return filters;
+}
+
+function candidateColumnFilter(
+  row: Row<CandidateListItem>,
+  columnId: string,
+  filterValue: unknown,
+) {
+  if (Array.isArray(filterValue)) {
+    const selectedValues = filterValue.map((value) => String(value));
+    if (!selectedValues.length) return true;
+    return selectedValues.includes(String(row.getValue(columnId) ?? ""));
+  }
+
+  const keyword = String(filterValue ?? "").trim().toLowerCase();
+  if (!keyword) return true;
+
+  return String(row.getValue(columnId) ?? "")
+    .toLowerCase()
+    .includes(keyword);
+}
+
 function normalizeCandidateTableColumnSettings(
   value: unknown,
 ): CandidateTableColumnSettings | null {
@@ -333,12 +432,6 @@ function getNextHrStatuses(status: string) {
   );
 }
 
-function shortenText(value: string | null | undefined, maxLength = 120) {
-  if (!value) return null;
-  if (value.length <= maxLength) return value;
-  return `${value.slice(0, maxLength).trim()}...`;
-}
-
 function getCandidateCvInfo(candidate: CandidateListItem) {
   return candidate.summary || candidate.notes || null;
 }
@@ -347,6 +440,59 @@ function getTime(value: Date | string | null | undefined) {
   if (!value) return 0;
   const time = new Date(value).getTime();
   return Number.isFinite(time) ? time : 0;
+}
+
+function OverflowTooltipText({
+  value,
+  fallback,
+  className,
+  multiline = false,
+}: {
+  value: string | null | undefined;
+  fallback: string;
+  className?: string;
+  multiline?: boolean;
+}) {
+  const ref = useRef<HTMLParagraphElement>(null);
+  const [isOverflowing, setIsOverflowing] = useState(false);
+  const text = value?.trim() || fallback;
+
+  useEffect(() => {
+    const element = ref.current;
+    if (!element) return;
+    const textElement = element;
+
+    function checkOverflow() {
+      setIsOverflowing(
+        textElement.scrollWidth > textElement.clientWidth + 1 ||
+          textElement.scrollHeight > textElement.clientHeight + 1,
+      );
+    }
+
+    checkOverflow();
+
+    const resizeObserver =
+      typeof ResizeObserver !== "undefined"
+        ? new ResizeObserver(checkOverflow)
+        : null;
+    resizeObserver?.observe(textElement);
+
+    return () => resizeObserver?.disconnect();
+  }, [text, multiline]);
+
+  return (
+    <p
+      ref={ref}
+      title={isOverflowing && value ? value : undefined}
+      className={cn(
+        "min-w-0",
+        multiline ? "line-clamp-3" : "truncate",
+        className,
+      )}
+    >
+      {text}
+    </p>
+  );
 }
 
 export function CandidatesListManager({
@@ -769,8 +915,10 @@ function CandidatesTable({
   >([]);
   const [portalReady, setPortalReady] = useState(false);
   const [settingsLoaded, setSettingsLoaded] = useState(false);
+  const [filtersLoaded, setFiltersLoaded] = useState(false);
   const [tableSettingsStatus, setTableSettingsStatus] =
     useState<TableSettingsStatus>("loading");
+  const filterStorageKey = `${CANDIDATE_TABLE_FILTERS_STORAGE_PREFIX}:${workspaceId}`;
 
   const columns = useMemo<ColumnDef<CandidateListItem>[]>(
     () =>
@@ -803,6 +951,32 @@ function CandidatesTable({
   useEffect(() => {
     setPortalReady(true);
   }, []);
+
+  useEffect(() => {
+    try {
+      const storedFilters = window.sessionStorage.getItem(filterStorageKey);
+      if (storedFilters) {
+        setColumnFilters(normalizeColumnFilters(JSON.parse(storedFilters)));
+      }
+    } catch {
+      window.sessionStorage.removeItem(filterStorageKey);
+    } finally {
+      setFiltersLoaded(true);
+    }
+  }, [filterStorageKey]);
+
+  useEffect(() => {
+    if (!filtersLoaded) return;
+
+    if (columnFilters.length) {
+      window.sessionStorage.setItem(
+        filterStorageKey,
+        JSON.stringify(columnFilters),
+      );
+    } else {
+      window.sessionStorage.removeItem(filterStorageKey);
+    }
+  }, [columnFilters, filterStorageKey, filtersLoaded]);
 
   useEffect(() => {
     let active = true;
@@ -892,6 +1066,9 @@ function CandidatesTable({
   const table = useReactTable({
     data: tableCandidates,
     columns,
+    defaultColumn: {
+      filterFn: candidateColumnFilter,
+    },
     state: {
       sorting,
       columnFilters,
@@ -916,6 +1093,14 @@ function CandidatesTable({
     .filter((column): column is Column<CandidateListItem, unknown> =>
       Boolean(column),
     );
+  const visibleLeftPinnedColumns = table
+    .getLeftVisibleLeafColumns()
+    .filter((column) => column.getIsVisible());
+  const leftPinnedColumnCount = visibleLeftPinnedColumns.length;
+  const leftPinnedColumnWidth = visibleLeftPinnedColumns.reduce(
+    (total, column) => total + column.getSize(),
+    0,
+  );
   const tableRows = table.getRowModel().rows;
   const visibleColumnCount = table.getVisibleLeafColumns().length;
   const groupedStatusRows = useMemo(() => {
@@ -1060,8 +1245,10 @@ function CandidatesTable({
           <td
             key={cell.id}
             className={cn(
-              "border-b border-white/75 px-4 py-4 text-sm shadow-[inset_0_-1px_0_rgba(255,255,255,0.6)]",
+              "border-b border-r border-white/75 px-4 py-4 text-sm shadow-[inset_0_-1px_0_rgba(255,255,255,0.6)] last:border-r-0",
               cell.column.getIsPinned() && "bg-white/95",
+              cell.column.getIsLastColumn("left") &&
+                "border-r-primary/25 shadow-[inset_-1px_0_0_rgba(160,57,100,0.18),8px_0_18px_-16px_rgba(15,23,42,0.45)]",
             )}
             style={{
               width: cell.column.getSize(),
@@ -1189,7 +1376,11 @@ function CandidatesTable({
                 {headerGroup.headers.map((header) => (
                   <th
                     key={header.id}
-                    className="sticky top-0 z-20 border-b border-primary/10 bg-white/95 px-4 py-3 align-top shadow-[inset_0_-1px_0_rgba(160,57,100,0.08)] backdrop-blur"
+                    className={cn(
+                      "sticky top-0 z-20 border-b border-r border-primary/10 bg-white/95 px-4 py-3 align-top shadow-[inset_0_-1px_0_rgba(160,57,100,0.08)] backdrop-blur last:border-r-0",
+                      header.column.getIsLastColumn("left") &&
+                        "border-r-primary/25 shadow-[inset_-1px_0_0_rgba(160,57,100,0.18),8px_0_18px_-16px_rgba(15,23,42,0.45)]",
+                    )}
                     style={{
                       width: header.getSize(),
                       minWidth: header.getSize(),
@@ -1216,7 +1407,7 @@ function CandidatesTable({
                         </span>
                         <SortIcon state={header.column.getIsSorted()} />
                       </button>
-                      <ColumnFilter column={header.column} />
+                      <ColumnFilter column={header.column} table={table} />
                     </div>
                   </th>
                 ))}
@@ -1230,42 +1421,73 @@ function CandidatesTable({
                   const collapsed = collapsedStatusGroups.includes(
                     group.status,
                   );
+                  const groupButton = (
+                    <button
+                      type="button"
+                      onClick={() => toggleStatusGroup(group.status)}
+                      className="flex h-full w-full items-center justify-between gap-4 bg-white/55 px-4 py-3 text-left transition hover:bg-white/85"
+                    >
+                      <span className="flex min-w-0 flex-wrap items-center gap-3">
+                        <span className="inline-flex size-8 shrink-0 items-center justify-center rounded-full bg-white text-primary shadow-[0_8px_20px_rgba(15,23,42,0.08)]">
+                          {collapsed ? (
+                            <ChevronRight className="size-4" />
+                          ) : (
+                            <ChevronDown className="size-4" />
+                          )}
+                        </span>
+                        <Badge className={meta.className}>
+                          {meta.label}
+                        </Badge>
+                        <span className="text-sm font-black text-on-surface">
+                          {group.rows.length} hồ sơ
+                        </span>
+                      </span>
+                    </button>
+                  );
 
                   return (
                     <Fragment key={group.status}>
                       <tr>
-                        <td
-                          colSpan={visibleColumnCount}
-                          className={cn(
-                            "sticky left-0 z-10 border-b border-white/80 p-0",
-                            statusSurfaceMap[group.status],
-                          )}
-                        >
-                          <button
-                            type="button"
-                            onClick={() => toggleStatusGroup(group.status)}
-                            className="flex w-full items-center justify-between gap-4 bg-white/55 px-4 py-3 text-left transition hover:bg-white/85"
-                          >
-                            <span className="flex min-w-0 flex-wrap items-center gap-3">
-                              <span className="inline-flex size-8 shrink-0 items-center justify-center rounded-full bg-white text-primary shadow-[0_8px_20px_rgba(15,23,42,0.08)]">
-                                {collapsed ? (
-                                  <ChevronRight className="size-4" />
-                                ) : (
-                                  <ChevronDown className="size-4" />
+                        {leftPinnedColumnCount ? (
+                          <>
+                            <td
+                              colSpan={leftPinnedColumnCount}
+                              className={cn(
+                                "sticky left-0 z-30 border-b border-r border-white/80 border-r-primary/25 p-0 shadow-[inset_-1px_0_0_rgba(160,57,100,0.18),8px_0_18px_-16px_rgba(15,23,42,0.45)]",
+                                statusSurfaceMap[group.status],
+                              )}
+                              style={{
+                                width: leftPinnedColumnWidth,
+                                minWidth: leftPinnedColumnWidth,
+                              }}
+                            >
+                              {groupButton}
+                            </td>
+                            {visibleColumnCount > leftPinnedColumnCount ? (
+                              <td
+                                colSpan={
+                                  visibleColumnCount - leftPinnedColumnCount
+                                }
+                                className={cn(
+                                  "border-b border-white/80 p-0",
+                                  statusSurfaceMap[group.status],
                                 )}
-                              </span>
-                              <Badge className={meta.className}>
-                                {meta.label}
-                              </Badge>
-                              <span className="text-sm font-black text-on-surface">
-                                {group.rows.length} hồ sơ
-                              </span>
-                            </span>
-                            <span className="shrink-0 text-xs font-black uppercase tracking-[0.14em] text-outline">
-                              {collapsed ? "Mở nhóm" : "Thu nhóm"}
-                            </span>
-                          </button>
-                        </td>
+                              >
+                                <div className="h-full min-h-[3.7rem] bg-white/35" />
+                              </td>
+                            ) : null}
+                          </>
+                        ) : (
+                          <td
+                            colSpan={visibleColumnCount}
+                            className={cn(
+                              "border-b border-white/80 p-0",
+                              statusSurfaceMap[group.status],
+                            )}
+                          >
+                            {groupButton}
+                          </td>
+                        )}
                       </tr>
                       {collapsed
                         ? null
@@ -1411,9 +1633,12 @@ function buildCandidateColumns({
           <div className="space-y-1">
             <Link
               href={`/workspace/${workspaceId}/candidates/${candidate.id}`}
-              className="font-black leading-6 text-on-surface underline-offset-4 transition hover:text-primary hover:underline"
+              className="block min-w-0 font-black leading-6 text-on-surface underline-offset-4 transition hover:text-primary hover:underline"
             >
-              {candidate.fullName || "Chưa có tên ứng viên"}
+              <OverflowTooltipText
+                value={candidate.fullName}
+                fallback="Chưa có tên ứng viên"
+              />
             </Link>
           </div>
         );
@@ -1427,12 +1652,16 @@ function buildCandidateColumns({
       size: 240,
       cell: ({ row }) => (
         <div className="space-y-1">
-          <p className="font-semibold text-on-surface">
-            {row.original.email || "Chưa có email"}
-          </p>
-          <p className="text-xs font-semibold text-on-surface-variant">
-            {row.original.phone || "Chưa có SĐT"}
-          </p>
+          <OverflowTooltipText
+            value={row.original.email}
+            fallback="Chưa có email"
+            className="font-semibold text-on-surface"
+          />
+          <OverflowTooltipText
+            value={row.original.phone}
+            fallback="Chưa có SĐT"
+            className="text-xs font-semibold text-on-surface-variant"
+          />
         </div>
       ),
     },
@@ -1442,9 +1671,11 @@ function buildCandidateColumns({
       header: candidateColumnLabels.position,
       size: 220,
       cell: ({ getValue }) => (
-        <p className="font-semibold text-on-surface">
-          {getValue<string>() || "Chưa có vị trí"}
-        </p>
+        <OverflowTooltipText
+          value={getValue<string>()}
+          fallback="Chưa có vị trí"
+          className="font-semibold text-on-surface"
+        />
       ),
     },
     {
@@ -1453,9 +1684,12 @@ function buildCandidateColumns({
       header: candidateColumnLabels.cvInfo,
       size: 320,
       cell: ({ getValue }) => (
-        <p className="line-clamp-3 text-sm font-medium leading-6 text-on-surface-variant">
-          {shortenText(getValue<string>(), 150) || "Chưa có thông tin thêm"}
-        </p>
+        <OverflowTooltipText
+          value={getValue<string>()}
+          fallback="Chưa có thông tin thêm"
+          className="text-sm font-medium leading-6 text-on-surface-variant"
+          multiline
+        />
       ),
     },
     {
@@ -1464,9 +1698,11 @@ function buildCandidateColumns({
       header: candidateColumnLabels.expectedSalary,
       size: 180,
       cell: ({ getValue }) => (
-        <p className="font-semibold text-on-surface">
-          {getValue<string>() || "Chưa nhập"}
-        </p>
+        <OverflowTooltipText
+          value={getValue<string>()}
+          fallback="Chưa nhập"
+          className="font-semibold text-on-surface"
+        />
       ),
     },
     {
@@ -1488,9 +1724,11 @@ function buildCandidateColumns({
               {statusMeta.label}
             </Badge>
             {status === "NO_HIRE" && row.original.noHireReason ? (
-              <p className="text-xs font-semibold text-rose-700">
-                {row.original.noHireReason}
-              </p>
+              <OverflowTooltipText
+                value={row.original.noHireReason}
+                fallback=""
+                className="text-xs font-semibold text-rose-700"
+              />
             ) : null}
           </div>
         );
@@ -1502,7 +1740,11 @@ function buildCandidateColumns({
       header: candidateColumnLabels.hr,
       size: 170,
       cell: ({ getValue }) => (
-        <p className="font-semibold text-on-surface">{getValue<string>()}</p>
+        <OverflowTooltipText
+          value={getValue<string>()}
+          fallback="Chưa có HR"
+          className="font-semibold text-on-surface"
+        />
       ),
     },
     {
@@ -1511,9 +1753,11 @@ function buildCandidateColumns({
       header: candidateColumnLabels.source,
       size: 160,
       cell: ({ getValue }) => (
-        <p className="font-semibold text-on-surface-variant">
-          {getValue<string>() || "Chưa rõ"}
-        </p>
+        <OverflowTooltipText
+          value={getValue<string>()}
+          fallback="Chưa rõ"
+          className="font-semibold text-on-surface-variant"
+        />
       ),
     },
     {
@@ -1522,9 +1766,11 @@ function buildCandidateColumns({
       header: candidateColumnLabels.project,
       size: 220,
       cell: ({ getValue }) => (
-        <p className="font-semibold text-on-surface">
-          {getValue<string>() || "Chưa gắn dự án"}
-        </p>
+        <OverflowTooltipText
+          value={getValue<string>()}
+          fallback="Chưa gắn dự án"
+          className="font-semibold text-on-surface"
+        />
       ),
     },
     {
@@ -1535,9 +1781,11 @@ function buildCandidateColumns({
       header: candidateColumnLabels.createdAt,
       size: 150,
       cell: ({ row }) => (
-        <p className="font-semibold text-on-surface">
-          {formatDate(row.original.createdAt)}
-        </p>
+        <OverflowTooltipText
+          value={formatDate(row.original.createdAt)}
+          fallback="Chưa có ngày"
+          className="font-semibold text-on-surface"
+        />
       ),
     },
     {
@@ -1548,9 +1796,11 @@ function buildCandidateColumns({
       header: candidateColumnLabels.updatedAt,
       size: 170,
       cell: ({ row }) => (
-        <p className="font-semibold text-on-surface">
-          {formatDateTime(row.original.updatedAt)}
-        </p>
+        <OverflowTooltipText
+          value={formatDateTime(row.original.updatedAt)}
+          fallback="Chưa cập nhật"
+          className="font-semibold text-on-surface"
+        />
       ),
     },
     {
@@ -1564,14 +1814,20 @@ function buildCandidateColumns({
       size: 240,
       cell: ({ row }) => (
         <div className="space-y-1">
-          <p className="font-semibold text-on-surface">
-            {row.original.interviewDate
-              ? formatDateTime(row.original.interviewDate)
-              : "Chưa lên lịch"}
-          </p>
-          <p className="text-xs font-semibold text-on-surface-variant">
-            {row.original.interviewerName || "Chưa có người phỏng vấn"}
-          </p>
+          <OverflowTooltipText
+            value={
+              row.original.interviewDate
+                ? formatDateTime(row.original.interviewDate)
+                : ""
+            }
+            fallback="Chưa lên lịch"
+            className="font-semibold text-on-surface"
+          />
+          <OverflowTooltipText
+            value={row.original.interviewerName}
+            fallback="Chưa có người phỏng vấn"
+            className="text-xs font-semibold text-on-surface-variant"
+          />
         </div>
       ),
     },
@@ -1588,11 +1844,15 @@ function buildCandidateColumns({
         return (
           <div className="space-y-2">
             <Badge className={reviewMeta.className}>{reviewMeta.label}</Badge>
-            <p className="text-xs font-semibold leading-5 text-on-surface-variant">
-              {row.original.managerReviewedByName
+            <OverflowTooltipText
+              value={
+                row.original.managerReviewedByName
                 ? `${row.original.managerReviewedByName}${row.original.managerReviewedAt ? ` • ${formatDateTime(row.original.managerReviewedAt)}` : ""}`
-                : "Chưa có đánh giá"}
-            </p>
+                  : ""
+              }
+              fallback="Chưa có đánh giá"
+              className="text-xs font-semibold leading-5 text-on-surface-variant"
+            />
           </div>
         );
       },
@@ -1603,15 +1863,17 @@ function buildCandidateColumns({
       header: candidateColumnLabels.managerOfferSalary,
       size: 180,
       cell: ({ getValue }) => (
-        <p className="font-semibold text-on-surface">
-          {getValue<string>() || "Chưa đề xuất"}
-        </p>
+        <OverflowTooltipText
+          value={getValue<string>()}
+          fallback="Chưa đề xuất"
+          className="font-semibold text-on-surface"
+        />
       ),
     },
     {
       id: "actions",
       header: candidateColumnLabels.actions,
-      size: 260,
+      size: 320,
       enableColumnFilter: false,
       enableHiding: false,
       enableSorting: false,
@@ -1645,6 +1907,27 @@ function buildCandidateColumns({
                   Đánh giá
                 </Button>
               ) : null}
+              {candidate.cvFile?.filePath ? (
+                <a
+                  href={candidate.cvFile.filePath}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="inline-flex h-9 items-center justify-center gap-1.5 rounded-[0.85rem] border border-primary/15 bg-white px-3 text-xs font-extrabold text-on-surface shadow-[0_10px_26px_rgba(160,57,100,0.08)] transition hover:bg-primary-container/70 hover:text-primary active:scale-[0.98]"
+                  title={candidate.cvFile.fileName}
+                >
+                  <FileText className="size-3.5" />
+                  CV
+                </a>
+              ) : (
+                <button
+                  type="button"
+                  disabled
+                  className="inline-flex h-9 items-center justify-center gap-1.5 rounded-[0.85rem] border border-primary/10 bg-surface-container-low/70 px-3 text-xs font-extrabold text-outline opacity-60"
+                >
+                  <FileText className="size-3.5" />
+                  CV
+                </button>
+              )}
               <Link href={`/workspace/${workspaceId}/candidates/${candidate.id}`}>
                 <Button
                   variant="ghost"
@@ -1703,58 +1986,226 @@ function SortIcon({ state }: { state: false | "asc" | "desc" }) {
   return <span className="size-3.5 rounded-full border border-outline/30" />;
 }
 
+function getColumnFilterOptionLabel(columnId: string, value: string) {
+  if (columnId === "status" && isCandidateStatus(value)) {
+    return candidateStatusMeta[value].label;
+  }
+
+  if (
+    columnId === "managerDecision" &&
+    MANAGER_DECISIONS.includes(value as ManagerDecisionType)
+  ) {
+    return managerDecisionMeta[value as ManagerDecisionType].label;
+  }
+
+  return value || "Chưa có dữ liệu";
+}
+
 function ColumnFilter({
   column,
+  table,
 }: {
   column: Column<CandidateListItem, unknown>;
+  table: Table<CandidateListItem>;
 }) {
+  const [open, setOpen] = useState(false);
+  const [dropdownPosition, setDropdownPosition] = useState<{
+    top: number;
+    left: number;
+    width: number;
+    maxHeight: number;
+  } | null>(null);
+  const buttonRef = useRef<HTMLButtonElement>(null);
+  const dropdownRef = useRef<HTMLDivElement>(null);
+
+  const selectedValues = Array.isArray(column.getFilterValue())
+    ? (column.getFilterValue() as unknown[]).map((value) => String(value))
+    : column.getFilterValue()
+      ? [String(column.getFilterValue())]
+      : [];
+  const selectedValueSet = new Set(selectedValues);
+  const options = Array.from(
+    new Set(
+      table
+        .getPreFilteredRowModel()
+        .flatRows.map((row) => String(row.getValue(column.id) ?? "").trim())
+        .filter(Boolean),
+    ),
+  ).sort((left, right) =>
+    getColumnFilterOptionLabel(column.id, left).localeCompare(
+      getColumnFilterOptionLabel(column.id, right),
+      "vi",
+    ),
+  );
+  const isMultiSelectFilter = multiSelectFilterColumnIds.has(column.id);
+
+  useEffect(() => {
+    if (!open) return;
+
+    function updateDropdownPosition() {
+      const button = buttonRef.current;
+      if (!button) return;
+
+      const rect = button.getBoundingClientRect();
+      const width = Math.max(rect.width, 256);
+      const left = Math.min(
+        Math.max(8, rect.left),
+        Math.max(8, window.innerWidth - width - 8),
+      );
+      const bottomTop = rect.bottom + 6;
+      const bottomMaxHeight = window.innerHeight - bottomTop - 12;
+
+      if (bottomMaxHeight >= 180) {
+        setDropdownPosition({
+          top: bottomTop,
+          left,
+          width,
+          maxHeight: Math.min(320, bottomMaxHeight),
+        });
+        return;
+      }
+
+      const topMaxHeight = Math.max(160, rect.top - 18);
+      const maxHeight = Math.min(320, topMaxHeight);
+      setDropdownPosition({
+        top: Math.max(12, rect.top - maxHeight - 6),
+        left,
+        width,
+        maxHeight,
+      });
+    }
+
+    updateDropdownPosition();
+    window.addEventListener("resize", updateDropdownPosition);
+    window.addEventListener("scroll", updateDropdownPosition, true);
+
+    return () => {
+      window.removeEventListener("resize", updateDropdownPosition);
+      window.removeEventListener("scroll", updateDropdownPosition, true);
+    };
+  }, [open]);
+
+  useEffect(() => {
+    if (!open) return;
+
+    function handlePointerDown(event: MouseEvent) {
+      const target = event.target as Node;
+      if (
+        buttonRef.current?.contains(target) ||
+        dropdownRef.current?.contains(target)
+      ) {
+        return;
+      }
+
+      setOpen(false);
+    }
+
+    document.addEventListener("mousedown", handlePointerDown);
+    return () => document.removeEventListener("mousedown", handlePointerDown);
+  }, [open]);
+
   if (!column.getCanFilter()) {
     return <div className="h-9" />;
   }
 
-  const value = (column.getFilterValue() ?? "") as string;
+  if (!isMultiSelectFilter) {
+    const textValue = Array.isArray(column.getFilterValue())
+      ? String((column.getFilterValue() as unknown[])[0] ?? "")
+      : String(column.getFilterValue() ?? "");
 
-  if (column.id === "status") {
     return (
-      <select
-        value={value}
-        onChange={(event) => column.setFilterValue(event.target.value || undefined)}
-        className="h-9 w-full rounded-[0.85rem] border border-primary/10 bg-white px-3 text-xs font-semibold text-on-surface outline-none transition focus:border-primary/25 focus:ring-4 focus:ring-primary/10"
-      >
-        <option value="">Tất cả</option>
-        {CANDIDATE_STATUSES.map((status) => (
-          <option key={status} value={status}>
-            {candidateStatusMeta[status].label}
-          </option>
-        ))}
-      </select>
+      <input
+        value={textValue}
+        onChange={(event) =>
+          column.setFilterValue(event.target.value || undefined)
+        }
+        placeholder="Lọc..."
+        className="h-9 w-full rounded-[0.85rem] border border-primary/10 bg-white px-3 text-xs font-semibold text-on-surface placeholder:text-outline outline-none transition focus:border-primary/25 focus:ring-4 focus:ring-primary/10"
+      />
     );
   }
 
-  if (column.id === "managerDecision") {
-    return (
-      <select
-        value={value}
-        onChange={(event) => column.setFilterValue(event.target.value || undefined)}
-        className="h-9 w-full rounded-[0.85rem] border border-primary/10 bg-white px-3 text-xs font-semibold text-on-surface outline-none transition focus:border-primary/25 focus:ring-4 focus:ring-primary/10"
-      >
-        <option value="">Tất cả</option>
-        {MANAGER_DECISIONS.map((decision) => (
-          <option key={decision} value={decision}>
-            {managerDecisionMeta[decision].label}
-          </option>
-        ))}
-      </select>
-    );
+  function setSelectedValue(value: string, checked: boolean) {
+    const nextValues = checked
+      ? [...selectedValues, value]
+      : selectedValues.filter((item) => item !== value);
+
+    column.setFilterValue(nextValues.length ? nextValues : undefined);
   }
 
   return (
-    <input
-      value={value}
-      onChange={(event) => column.setFilterValue(event.target.value || undefined)}
-      placeholder="Lọc..."
-      className="h-9 w-full rounded-[0.85rem] border border-primary/10 bg-white px-3 text-xs font-semibold text-on-surface placeholder:text-outline outline-none transition focus:border-primary/25 focus:ring-4 focus:ring-primary/10"
-    />
+    <div className="relative">
+      <button
+        ref={buttonRef}
+        type="button"
+        onClick={() => setOpen((current) => !current)}
+        disabled={!options.length}
+        className={cn(
+          "flex h-9 w-full items-center justify-between gap-2 rounded-[0.85rem] border border-primary/10 bg-white px-3 text-left text-xs font-semibold text-on-surface outline-none transition hover:border-primary/25 focus:border-primary/25 focus:ring-4 focus:ring-primary/10 disabled:cursor-not-allowed disabled:opacity-50",
+          selectedValues.length && "border-primary/25 text-primary",
+        )}
+      >
+        <span className="truncate">
+          {selectedValues.length
+            ? `Đã chọn ${selectedValues.length}`
+            : "Tất cả"}
+        </span>
+        <ChevronDown className="size-3.5 shrink-0 text-outline" />
+      </button>
+
+      {open && dropdownPosition
+        ? createPortal(
+        <div
+          ref={dropdownRef}
+          className="fixed z-[120] overflow-hidden rounded-[1rem] border border-primary/10 bg-white shadow-[0_18px_42px_rgba(15,23,42,0.18)]"
+          style={{
+            top: dropdownPosition.top,
+            left: dropdownPosition.left,
+            width: dropdownPosition.width,
+          }}
+        >
+          <div className="flex items-center justify-between gap-2 border-b border-primary/10 px-3 py-2">
+            <span className="text-xs font-black uppercase tracking-[0.12em] text-outline">
+              Lọc
+            </span>
+            {selectedValues.length ? (
+              <button
+                type="button"
+                onClick={() => column.setFilterValue(undefined)}
+                className="text-xs font-black text-primary hover:text-primary/80"
+              >
+                Bỏ chọn
+              </button>
+            ) : null}
+          </div>
+          <div
+            className="overflow-y-auto p-2"
+            style={{ maxHeight: dropdownPosition.maxHeight }}
+          >
+            {options.map((option) => (
+              <label
+                key={option}
+                className="flex cursor-pointer items-center gap-2 rounded-[0.75rem] px-2 py-2 text-xs font-semibold text-on-surface transition hover:bg-primary-container/45"
+              >
+                <input
+                  type="checkbox"
+                  checked={selectedValueSet.has(option)}
+                  onChange={(event) =>
+                    setSelectedValue(option, event.target.checked)
+                  }
+                  className="size-3.5 accent-primary"
+                />
+                <span className="min-w-0 truncate">
+                  {getColumnFilterOptionLabel(column.id, option)}
+                </span>
+              </label>
+            ))}
+          </div>
+        </div>,
+            document.body,
+          )
+        : null}
+    </div>
   );
 }
 
