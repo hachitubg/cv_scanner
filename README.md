@@ -109,8 +109,6 @@ npm run db:push
 npm run db:seed
 npm run lint
 npm run build
-npm run jobs:cleanup-cv-files
-npm run jobs:cleanup-cv-files:weekly
 ```
 
 ## Ghi chú
@@ -119,7 +117,3 @@ npm run jobs:cleanup-cv-files:weekly
 - File upload nằm ở `public/uploads/<workspaceId>`.
 - `npm run db:setup` sẽ tạo lại schema SQLite, generate Prisma Client, và seed dữ liệu demo.
 - `/admin` chỉ dành cho `ADMIN` toàn hệ thống.
-- Sau khi cập nhật schema trên VPS, chạy `npm run db:push` để bổ sung field archive mà không reset database.
-- Job `npm run jobs:cleanup-cv-files` xóa file CV vật lý đã upload quá 3 tháng, nén `CVFile.rawText` sang `data/archive/cv-raw-text/**/*.txt.gz`, giữ lại record database, clear `filePath/rawText`, và chạy `VACUUM` để SQLite trả dung lượng.
-- Trên VPS nên chạy cron vào Chủ nhật, ví dụ `0 2 * * 0 cd /path/to/CV_SCANNER && npm run jobs:cleanup-cv-files`.
-- Nếu chạy bằng PM2/systemd riêng, có thể dùng `npm run jobs:cleanup-cv-files:weekly` để scheduler tự chạy mỗi Chủ nhật 02:00 theo timezone của VPS.

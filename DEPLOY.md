@@ -9,7 +9,6 @@
 - Runtime logs:
   - PM2 logs: `pm2 logs cv-scanner`
   - App logs: `logs/app-YYYY-MM-DD.log`
-  - Weekly cleanup cron log: `/var/log/cv-scanner-cleanup.log`
 
 ## Environment
 
@@ -26,10 +25,6 @@ EMAIL_PROVIDER="brevo"
 EMAIL_FROM="<verified-sender-email>"
 EMAIL_FROM_NAME="Lệ HR"
 BREVO_API_KEY="<brevo-api-key>"
-CV_FILE_RETENTION_MONTHS="3"
-CV_FILE_CLEANUP_BATCH_SIZE="100"
-CV_FILE_CLEANUP_HOUR="2"
-CV_FILE_CLEANUP_MINUTE="0"
 ```
 
 After changing `.env`:
@@ -90,22 +85,6 @@ pm2 save
 ```
 
 The VPS currently needs swap for `next build`. Do not remove `/swapfile` unless RAM is upgraded.
-
-## Weekly cleanup
-
-Cron file:
-
-```text
-/etc/cron.d/cv-scanner-cleanup
-```
-
-Schedule:
-
-```cron
-0 2 * * 0 root cd /var/www/cv_scanner && npm run jobs:cleanup-cv-files >> /var/log/cv-scanner-cleanup.log 2>&1
-```
-
-The cleanup job keeps database records, deletes old physical CV files, archives old `rawText` into gzip files, clears `filePath/rawText`, and runs SQLite `VACUUM`.
 
 ## Quick checks
 
