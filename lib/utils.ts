@@ -4,7 +4,6 @@ import { clsx, type ClassValue } from "clsx";
 import { twMerge } from "tailwind-merge";
 
 import {
-  CANDIDATE_STATUSES,
   type CandidateStatusType,
   type ManagerDecisionType,
   type ManagerFinalStatusType,
@@ -64,13 +63,13 @@ export const candidateStatusMeta: Record<
     className: "bg-secondary-fixed text-on-secondary-container",
   },
   OFFER: {
-    label: "Đã Offer",
+    label: "Offer",
     shortLabel: "Offer",
     className: "bg-primary text-white",
   },
   HIRE: {
-    label: "Đã tuyển",
-    shortLabel: "Tuyển",
+    label: "Chấp nhận tuyển",
+    shortLabel: "Chấp nhận",
     className: "bg-tertiary-container text-on-tertiary-container",
   },
   ONBOARDED: {
@@ -90,13 +89,49 @@ export const candidateStatusMeta: Record<
   },
 };
 
+const candidateStatusTransitions: Record<
+  CandidateStatusType,
+  readonly CandidateStatusType[]
+> = {
+  NEW: ["INTERVIEW", "NO_HIRE"],
+  INTERVIEW: ["OFFER", "NO_HIRE"],
+  OFFER: ["HIRE", "NO_HIRE"],
+  HIRE: ["ONBOARDED", "NO_HIRE"],
+  ONBOARDED: ["PERMANENT", "NO_HIRE"],
+  PERMANENT: [],
+  NO_HIRE: [],
+};
+
+export function getAllowedCandidateStatusTransitions(
+  currentStatus: string,
+): CandidateStatusType[] {
+  return [...candidateStatusTransitions[normalizeCandidateStatus(currentStatus)]];
+}
+
+export function isAllowedCandidateStatusTransition(
+  currentStatus: string,
+  nextStatus: string,
+) {
+  const normalizedCurrentStatus = normalizeCandidateStatus(currentStatus);
+  const normalizedNextStatus = normalizeCandidateStatus(nextStatus);
+
+  return (
+    normalizedCurrentStatus === normalizedNextStatus ||
+    candidateStatusTransitions[normalizedCurrentStatus].includes(
+      normalizedNextStatus,
+    )
+  );
+}
+
 export function getCandidateStatusOptions(
-  _currentStatus: string,
+  currentStatus: string,
   _actor: "hr" | "manager",
 ) {
-  return CANDIDATE_STATUSES.filter(
-    (status, index, statuses) => statuses.indexOf(status) === index,
-  );
+  const normalizedCurrentStatus = normalizeCandidateStatus(currentStatus);
+  return [
+    normalizedCurrentStatus,
+    ...getAllowedCandidateStatusTransitions(normalizedCurrentStatus),
+  ];
 }
 
 export function normalizeCandidateStatus(value?: string | null): CandidateStatusType {
@@ -160,7 +195,7 @@ export const managerFinalStatusMeta: Record<
   { label: string; className: string }
 > = {
   HIRE: {
-    label: "Đã tuyển",
+    label: "Chấp nhận tuyển",
     className: "bg-primary text-white",
   },
 };

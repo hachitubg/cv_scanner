@@ -14,6 +14,7 @@ DROP TABLE IF EXISTS "WorkspaceTodo";
 DROP TABLE IF EXISTS "WorkspaceDropdownOption";
 DROP TABLE IF EXISTS "Project";
 DROP TABLE IF EXISTS "CVFile";
+DROP TABLE IF EXISTS "WorkspaceInvitation";
 DROP TABLE IF EXISTS "WorkspaceMember";
 DROP TABLE IF EXISTS "Workspace";
 DROP TABLE IF EXISTS "User";
@@ -59,6 +60,34 @@ CREATE TABLE "WorkspaceMember" (
 
 CREATE UNIQUE INDEX "WorkspaceMember_workspaceId_userId_key"
   ON "WorkspaceMember"("workspaceId", "userId");
+
+CREATE TABLE "WorkspaceInvitation" (
+  "id" TEXT NOT NULL PRIMARY KEY,
+  "workspaceId" TEXT NOT NULL,
+  "invitedEmail" TEXT NOT NULL,
+  "role" TEXT NOT NULL DEFAULT 'HR',
+  "tokenHash" TEXT NOT NULL,
+  "invitedById" TEXT NOT NULL,
+  "acceptedAt" DATETIME,
+  "expiresAt" DATETIME NOT NULL,
+  "createdAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  "updatedAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  CONSTRAINT "WorkspaceInvitation_workspaceId_fkey"
+    FOREIGN KEY ("workspaceId") REFERENCES "Workspace" ("id")
+    ON DELETE CASCADE ON UPDATE CASCADE,
+  CONSTRAINT "WorkspaceInvitation_invitedById_fkey"
+    FOREIGN KEY ("invitedById") REFERENCES "User" ("id")
+    ON DELETE CASCADE ON UPDATE CASCADE
+);
+
+CREATE UNIQUE INDEX "WorkspaceInvitation_tokenHash_key"
+  ON "WorkspaceInvitation"("tokenHash");
+
+CREATE INDEX "WorkspaceInvitation_workspaceId_invitedEmail_idx"
+  ON "WorkspaceInvitation"("workspaceId", "invitedEmail");
+
+CREATE INDEX "WorkspaceInvitation_tokenHash_idx"
+  ON "WorkspaceInvitation"("tokenHash");
 
 CREATE TABLE "CVFile" (
   "id" TEXT NOT NULL PRIMARY KEY,

@@ -22,6 +22,18 @@ export default async function WorkspaceMembersPage({
         include: { user: true },
         orderBy: { joinedAt: "asc" },
       },
+      invitations: {
+        where: {
+          acceptedAt: null,
+          expiresAt: {
+            gt: new Date(),
+          },
+        },
+        include: {
+          invitedBy: true,
+        },
+        orderBy: { createdAt: "desc" },
+      },
     },
   });
 
@@ -48,6 +60,14 @@ export default async function WorkspaceMembersPage({
         members={workspace.members.map((member) => ({
           ...member,
           role: member.role as "HR_ADMIN" | "HR" | "MANAGER",
+        }))}
+        pendingInvitations={workspace.invitations.map((invitation) => ({
+          id: invitation.id,
+          invitedEmail: invitation.invitedEmail,
+          role: invitation.role as "HR_ADMIN" | "HR" | "MANAGER",
+          createdAt: invitation.createdAt,
+          expiresAt: invitation.expiresAt,
+          invitedByName: invitation.invitedBy.name,
         }))}
         canManage={true}
       />

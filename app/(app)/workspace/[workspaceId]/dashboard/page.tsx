@@ -188,8 +188,8 @@ export default async function WorkspaceDashboardPage({
   const funnelData = [
     { name: "Mới nhận", value: total },
     { name: "Mời phỏng vấn", value: interviewing },
-    { name: "Đã Offer", value: offered },
-    { name: "Đã tuyển", value: hired },
+    { name: "Offer", value: offered },
+    { name: "Chấp nhận tuyển", value: hired },
     { name: "Nhận việc", value: onboarded },
     { name: "Chính thức", value: permanent },
   ];
@@ -223,7 +223,7 @@ export default async function WorkspaceDashboardPage({
       iconClassName: "bg-secondary/12 text-secondary",
     },
     {
-      label: "Đã tuyển",
+      label: "Chấp nhận tuyển",
       value: hired,
       note: "Đã được duyệt tuyển",
       icon: CheckCheck,

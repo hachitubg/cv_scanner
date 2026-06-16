@@ -599,12 +599,12 @@ export function CandidateDetailForm({
                 </div>
 
                 <p className="mt-4 rounded-[1.1rem] bg-surface-container-low px-4 py-3 text-sm font-semibold text-on-surface-variant">
-                  Khi lưu, hồ sơ sẽ chuyển sang trạng thái Đã tuyển.
+                  Khi lưu, hồ sơ sẽ chuyển sang trạng thái Chấp nhận tuyển.
                 </p>
 
                 <div className="mt-5">
                   <Button onClick={saveManagerReview} disabled={isPending}>
-                    {isPending ? "Đang lưu..." : "Chuyển sang Đã tuyển"}
+                    {isPending ? "Đang lưu..." : "Chuyển sang Chấp nhận tuyển"}
                   </Button>
                 </div>
               </>

@@ -27,6 +27,7 @@ import {
   ChevronRight,
   CheckCircle2,
   ClipboardCheck,
+  CircleHelp,
   Eye,
   EyeOff,
   FileText,
@@ -2599,24 +2600,46 @@ function StatusEditForm({
   onChange: (patch: Partial<StatusDraftState>) => void;
   onSave: () => void;
 }) {
+  const [isFlowHelpOpen, setIsFlowHelpOpen] = useState(false);
+
   return (
     <div className="space-y-4">
-      <select
-        className="field bg-surface-container-low"
-        value={draft.status}
-        onChange={(event) =>
-          onChange({
-            status: event.target.value as CandidateStatusType,
-          })
-        }
-        disabled={isSaving}
-      >
-        {statusOptions.map((statusOption) => (
-          <option key={statusOption} value={statusOption}>
-            {candidateStatusMeta[statusOption].label}
-          </option>
-        ))}
-      </select>
+      <div>
+        <div className="mb-2 flex items-center justify-between gap-3">
+          <label className="text-xs font-black uppercase tracking-[0.14em] text-outline">
+            Chọn trạng thái
+          </label>
+          <button
+            type="button"
+            className="inline-flex size-8 items-center justify-center rounded-full bg-surface-container-low text-primary transition hover:bg-primary-container"
+            onClick={() => setIsFlowHelpOpen((current) => !current)}
+            aria-label="Xem luồng chuyển trạng thái"
+            aria-expanded={isFlowHelpOpen}
+            title="Xem luồng chuyển trạng thái"
+          >
+            <CircleHelp className="size-4" />
+          </button>
+        </div>
+
+        <select
+          className="field bg-surface-container-low"
+          value={draft.status}
+          onChange={(event) =>
+            onChange({
+              status: event.target.value as CandidateStatusType,
+            })
+          }
+          disabled={isSaving}
+        >
+          {statusOptions.map((statusOption) => (
+            <option key={statusOption} value={statusOption}>
+              {candidateStatusMeta[statusOption].label}
+            </option>
+          ))}
+        </select>
+      </div>
+
+      {isFlowHelpOpen ? <CandidateStatusFlowHelp /> : null}
 
       {needsInterviewDetails(draft.status) ? (
         <div className="grid gap-3 md:grid-cols-2">
@@ -2689,6 +2712,41 @@ function StatusEditForm({
   );
 }
 
+function CandidateStatusFlowHelp() {
+  const mainFlow: CandidateStatusType[] = [
+    "NEW",
+    "INTERVIEW",
+    "OFFER",
+    "HIRE",
+    "ONBOARDED",
+    "PERMANENT",
+  ];
+
+  return (
+    <div className="rounded-[1.2rem] border border-primary/15 bg-primary-container/25 p-4">
+      <p className="text-sm font-black text-on-surface">
+        Luồng xử lý ứng viên
+      </p>
+      <div className="mt-3 flex flex-wrap items-center gap-2">
+        {mainFlow.map((status, index) => (
+          <Fragment key={status}>
+            <Badge className={candidateStatusMeta[status].className}>
+              {candidateStatusMeta[status].label}
+            </Badge>
+            {index < mainFlow.length - 1 ? (
+              <ChevronRight className="size-4 shrink-0 text-outline" />
+            ) : null}
+          </Fragment>
+        ))}
+      </div>
+      <p className="mt-3 text-xs font-semibold leading-5 text-on-surface-variant">
+        Từ mỗi bước trước trạng thái Chính thức, ứng viên đều có thể chuyển sang
+        Không tuyển và bắt buộc chọn lý do.
+      </p>
+    </div>
+  );
+}
+
 function ReviewEditForm({
   draft,
   isSaving,
@@ -2716,12 +2774,12 @@ function ReviewEditForm({
       />
 
       <p className="rounded-[1.1rem] bg-surface-container-low px-4 py-3 text-sm font-semibold text-on-surface-variant">
-        Khi lưu, hồ sơ sẽ chuyển sang trạng thái Đã tuyển.
+        Khi lưu, hồ sơ sẽ chuyển sang trạng thái Chấp nhận tuyển.
       </p>
 
       <div className="flex flex-wrap gap-3">
         <Button onClick={onSave} disabled={isSaving}>
-          {isSaving ? "Đang lưu..." : "Chuyển sang Đã tuyển"}
+          {isSaving ? "Đang lưu..." : "Chuyển sang Chấp nhận tuyển"}
         </Button>
       </div>
     </div>

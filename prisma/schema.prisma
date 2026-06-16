@@ -20,6 +20,7 @@ model User {
 
   ownedWorkspaces  Workspace[]       @relation("WorkspaceOwner")
   workspaceMembers WorkspaceMember[]
+  sentWorkspaceInvitations WorkspaceInvitation[] @relation("WorkspaceInvitationInviter")
   candidates       Candidate[]       @relation("CandidateHR")
   managerReviews   Candidate[]       @relation("CandidateManagerReviewer")
   uploadedFiles    CVFile[]          @relation("FileUploader")
@@ -49,6 +50,7 @@ model Workspace {
 
   owner      User              @relation("WorkspaceOwner", fields: [ownerId], references: [id], onDelete: Cascade)
   members    WorkspaceMember[]
+  invitations WorkspaceInvitation[]
   candidates Candidate[]
   cvFiles    CVFile[]
   projects   Project[]
@@ -67,6 +69,25 @@ model WorkspaceMember {
   user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@unique([workspaceId, userId])
+}
+
+model WorkspaceInvitation {
+  id          String    @id @default(cuid())
+  workspaceId String
+  invitedEmail String
+  role        String    @default("HR")
+  tokenHash   String    @unique
+  invitedById String
+  acceptedAt  DateTime?
+  expiresAt   DateTime
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  invitedBy User      @relation("WorkspaceInvitationInviter", fields: [invitedById], references: [id], onDelete: Cascade)
+
+  @@index([workspaceId, invitedEmail])
+  @@index([tokenHash])
 }
 
 model CVFile {

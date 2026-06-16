@@ -4,13 +4,18 @@ import { z } from "zod";
 import { auth } from "@/lib/auth";
 import { requireWorkspaceHrAdmin } from "@/lib/permissions";
 import { prisma } from "@/lib/prisma";
+import { issueWorkspaceInvitation } from "@/lib/workspace-invitations";
+import { WORKSPACE_ROLES } from "@/types";
 
 const inviteMemberSchema = z.object({
   email: z.string().trim().email("Email không hợp lệ."),
-  role: z.enum(["HR", "HR_ADMIN", "MANAGER"]).default("HR"),
+  role: z.enum(WORKSPACE_ROLES).default("HR"),
 });
 
-export async function POST(request: Request, { params }: { params: Promise<{ workspaceId: string }> }) {
+export async function POST(
+  request: Request,
+  { params }: { params: Promise<{ workspaceId: string }> },
+) {
   const session = await auth();
   if (!session?.user) {
     return NextResponse.json({ error: "Bạn chưa đăng nhập." }, { status: 401 });
@@ -36,49 +41,48 @@ export async function POST(request: Request, { params }: { params: Promise<{ wor
     );
   }
 
-  const user = await prisma.user.findUnique({
-    where: { email: parsed.data.email.toLowerCase() },
-    select: {
-      id: true,
-      name: true,
-      email: true,
-      emailVerifiedAt: true,
-    },
-  });
-
-  if (!user) {
-    return NextResponse.json(
-      { error: "Không tìm thấy tài khoản với email này. Người dùng cần tự đăng ký trước." },
-      { status: 404 },
-    );
-  }
-
-  if (!user.emailVerifiedAt) {
-    return NextResponse.json(
-      { error: "Tài khoản này chưa xác minh email. Hãy yêu cầu người dùng xác minh trước khi thêm vào workspace." },
-      { status: 400 },
-    );
-  }
-
-  const membership = await prisma.workspaceMember.upsert({
+  const invitedEmail = parsed.data.email.toLowerCase();
+  const existingMembership = await prisma.workspaceMember.findFirst({
     where: {
-      workspaceId_userId: {
-        workspaceId,
-        userId: user.id,
+      workspaceId,
+      user: {
+        email: invitedEmail,
       },
     },
-    update: {
-      role: parsed.data.role,
-    },
-    create: {
-      workspaceId,
-      userId: user.id,
-      role: parsed.data.role,
-    },
-    include: {
-      user: true,
+    select: {
+      id: true,
     },
   });
 
-  return NextResponse.json(membership);
+  if (existingMembership) {
+    return NextResponse.json(
+      { error: "Email này đã là thành viên của workspace." },
+      { status: 409 },
+    );
+  }
+
+  try {
+    const delivery = await issueWorkspaceInvitation({
+      workspaceId,
+      invitedEmail,
+      role: parsed.data.role,
+      invitedById: session.user.id,
+    });
+
+    return NextResponse.json(
+      {
+        success: true,
+        invitationId: delivery.invitation.id,
+        emailSent: delivery.delivered,
+        previewUrl: delivery.previewUrl || delivery.invitationUrl,
+      },
+      { status: 201 },
+    );
+  } catch (error) {
+    console.error("Issue workspace invitation failed:", error);
+    return NextResponse.json(
+      { error: "Không thể gửi lời mời workspace." },
+      { status: 500 },
+    );
+  }
 }

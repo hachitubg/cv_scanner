@@ -3,6 +3,10 @@ import { z } from "zod";
 
 import { auth } from "@/lib/auth";
 import {
+  getPublicAppUrl,
+  sendOfferApprovalNotifications,
+} from "@/lib/email";
+import {
   canAssignCandidateToHr,
   canEditWorkspaceCandidate,
   canManageCandidate,
@@ -12,6 +16,8 @@ import {
 } from "@/lib/permissions";
 import { prisma } from "@/lib/prisma";
 import {
+  candidateStatusMeta,
+  isAllowedCandidateStatusTransition,
   normalizeCandidateStatus,
   stringifySkills,
   toBirthYear,
@@ -301,6 +307,19 @@ export async function PATCH(
 
   const nextStatus = parsed.data.status;
   const resolvedStatus = nextStatus ?? currentStatus;
+
+  if (
+    nextStatus &&
+    !isAllowedCandidateStatusTransition(currentStatus, nextStatus)
+  ) {
+    return NextResponse.json(
+      {
+        error: `Không thể chuyển trực tiếp từ ${candidateStatusMeta[currentStatus].label} sang ${candidateStatusMeta[normalizeCandidateStatus(nextStatus)].label}.`,
+      },
+      { status: 400 },
+    );
+  }
+
   const nextInterviewDate =
     parsed.data.interviewDate ?? currentCandidate.interviewDate ?? "";
   const nextInterviewerName =
@@ -653,6 +672,53 @@ export async function PATCH(
         note: noteParts.join("\n") || null,
       },
     });
+  }
+
+  if (
+    nextStatus &&
+    currentStatus !== resolvedStatus &&
+    resolvedStatus === "OFFER"
+  ) {
+    const managers = await prisma.workspaceMember.findMany({
+      where: {
+        workspaceId: currentCandidate.workspaceId,
+        role: "MANAGER",
+      },
+      select: {
+        user: {
+          select: {
+            email: true,
+            name: true,
+          },
+        },
+      },
+    });
+
+    if (managers.length) {
+      try {
+        const delivery = await sendOfferApprovalNotifications({
+          recipients: managers.map(({ user }) => user),
+          workspaceName: currentCandidate.workspace.name,
+          candidateName:
+            updatedCandidate.fullName ||
+            "\u1ee8ng vi\u00ean ch\u01b0a c\u00f3 t\u00ean",
+          candidatePosition: updatedCandidate.position,
+          candidateEmail: updatedCandidate.email,
+          detailUrl: `${getPublicAppUrl()}/workspace/${currentCandidate.workspaceId}/candidates/${candidateId}`,
+        });
+
+        if (delivery.delivered < delivery.total) {
+          console.error(
+            `Offer approval email delivered to ${delivery.delivered}/${delivery.total} managers for candidate ${candidateId}.`,
+          );
+        }
+      } catch (error) {
+        console.error(
+          `Failed to send Offer approval email for candidate ${candidateId}:`,
+          error,
+        );
+      }
+    }
   }
 
   return NextResponse.json(updatedCandidate);
