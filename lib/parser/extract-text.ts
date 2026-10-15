@@ -12,6 +12,8 @@ export function normalizeText(rawText: string) {
     .normalize("NFKC")
     .replace(/\r\n?/g, "\n")
     .replace(/[\u200B\uFEFF\u00AD]/g, "")
+    .replace(/([\w.+-]+)[ \t]*@[ \t]*((?:[\w-]+[ \t]*\.[ \t]*)+[a-z]{2,})/gi,
+      (_match, local: string, domain: string) => `${local}@${domain.replace(/[ \t]/g, "")}`)
     .replace(/[•●▪◦·]/g, "\n- ")
     .replace(/[ \t]+\n/g, "\n")
     .replace(/\n[ \t]+/g, "\n")

@@ -41,6 +41,11 @@ test("normalization preserves Vietnamese and CRLF paragraphs", () => {
   assert.equal(normalizeText("NGUYỄN VĂN AN\r\nEmail: an@example.com"), "NGUYỄN VĂN AN\nEmail: an@example.com");
 });
 
+test("OCR email whitespace is repaired without joining unrelated lines", () => {
+  assert.equal(normalizeText("Email: candidate @ example. com.vn"), "Email: candidate@example.com.vn");
+  assert.equal(normalizeText("candidate@example.\nNext section"), "candidate@example.\nNext section");
+});
+
 test("extract full email domains and do not mistake job title for name", () => {
   const fields = extractFields("Software Engineer\nNGUYỄN VĂN AN\nEmail: an@company.com.vn\nĐiện thoại: 0901234567");
   assert.equal(fields.fullName, "Nguyễn Văn An");
