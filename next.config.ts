@@ -1,7 +1,7 @@
 import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
-  serverExternalPackages: ["@napi-rs/canvas", "pdfjs-dist", "tesseract.js"],
+  serverExternalPackages: ["@napi-rs/canvas", "pdf-parse", "pdfjs-dist", "tesseract.js"],
   images: {
     remotePatterns: [
       {

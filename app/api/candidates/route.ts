@@ -190,8 +190,19 @@ export async function POST(request: Request) {
     }
 
     const buffer = Buffer.from(await file.arrayBuffer());
+    let rawText: string;
+    try {
+      rawText = await extractTextFromFile(file.name, buffer, file.type);
+    } catch (error) {
+      const code = error instanceof Error ? error.message : "";
+      const message = code === "PDF_PASSWORD_REQUIRED"
+        ? "Vui lòng bỏ mật khẩu PDF trước khi tải lên."
+        : code === "UNSUPPORTED_FILE_TYPE"
+          ? "Chỉ hỗ trợ PDF, DOCX, TXT và ảnh."
+          : "Không thể đọc nội dung CV. Vui lòng kiểm tra file hoặc dùng bản scan rõ hơn.";
+      return NextResponse.json({ error: message }, { status: 422 });
+    }
     const filePath = await saveUploadedFile(workspaceId, file.name, buffer);
-    const rawText = await extractTextFromFile(file.name, buffer, file.type);
 
     const cvFile = await prisma.cVFile.create({
       data: {

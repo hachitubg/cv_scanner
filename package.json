@@ -3,6 +3,7 @@
   "version": "1.0.0",
   "private": true,
   "scripts": {
+    "test:parser": "tsx --test tests/cv-parser.test.ts tests/gemini-cv.test.ts",
     "dev": "next dev",
     "build": "next build",
     "start": "next start",

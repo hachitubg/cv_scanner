@@ -1,33 +1,11 @@
 import { NextResponse } from "next/server";
 
-import { extractFieldsWithGemini, GeminiApiError } from "@/lib/ai/gemini-cv-review";
+import { extractFieldsWithGemini, GeminiApiError, getVisualDocumentMimeType } from "@/lib/ai/gemini-cv-review";
 import { auth } from "@/lib/auth";
 import { extractFields } from "@/lib/parser/extract-fields";
 import { extractTextFromFile } from "@/lib/parser/extract-text";
 import { toBirthYear } from "@/lib/utils";
 import type { ParsedCVResult } from "@/types";
-
-function mergeParsedResults(base: ParsedCVResult, enriched: ParsedCVResult): ParsedCVResult {
-  const mergedSkills = Array.from(new Set([...(enriched.skills ?? []), ...(base.skills ?? [])])).slice(0, 20);
-  const mergedNotes = [enriched.notes, base.notes].filter(Boolean).join("\n\n").trim();
-
-  return {
-    fullName: enriched.fullName ?? base.fullName,
-    email: enriched.email ?? base.email,
-    phone: enriched.phone ?? base.phone,
-    dateOfBirth: toBirthYear(enriched.dateOfBirth ?? base.dateOfBirth) || undefined,
-    address: enriched.address ?? base.address,
-    hometown: enriched.hometown ?? base.hometown,
-    school: enriched.school ?? base.school,
-    graduationYear: enriched.graduationYear ?? base.graduationYear,
-    yearsOfExperience: enriched.yearsOfExperience ?? base.yearsOfExperience,
-    position: enriched.position ?? base.position,
-    summary: enriched.summary ?? base.summary,
-    skills: mergedSkills.length ? mergedSkills : undefined,
-    notes: mergedNotes || undefined,
-    rawText: base.rawText,
-  };
-}
 
 function normalizeParsedResult(result: ParsedCVResult): ParsedCVResult {
   return {
@@ -71,11 +49,9 @@ export async function POST(request: Request) {
 
   try {
     const buffer = Buffer.from(await file.arrayBuffer());
-    const rawText = await extractTextFromFile(file.name, buffer, file.type);
-    const parsed = normalizeParsedResult(extractFields(rawText));
-
     if (scanMode !== "ai") {
-      return NextResponse.json(parsed);
+      const rawText = await extractTextFromFile(file.name, buffer, file.type);
+      return NextResponse.json(normalizeParsedResult(extractFields(rawText)));
     }
 
     const geminiApiKey = request.headers.get("x-gemini-api-key")?.trim();
@@ -87,10 +63,10 @@ export async function POST(request: Request) {
       return errorResponse(400, "Thiếu Gemini model để thực hiện AI Scan.");
     }
 
-    const aiParsed = normalizeParsedResult(
-      await extractFieldsWithGemini(rawText, geminiApiKey, geminiModel),
-    );
-    return NextResponse.json(mergeParsedResults(parsed, aiParsed));
+    const document = { fileName: file.name, buffer, mimeType: file.type };
+    const rawText = getVisualDocumentMimeType(document) ? "" : await extractTextFromFile(file.name, buffer, file.type);
+    const aiParsed = normalizeParsedResult(await extractFieldsWithGemini(rawText, geminiApiKey, geminiModel, document));
+    return NextResponse.json(aiParsed);
   } catch (error) {
     const message = error instanceof Error ? error.message : "";
     const detail = formatGeminiErrorDetail(message);
@@ -109,6 +85,12 @@ export async function POST(request: Request) {
 
     if (message === "UNSUPPORTED_FILE_TYPE") {
       return errorResponse(400, "Chỉ hỗ trợ PDF, DOCX, TXT và ảnh PNG/JPG/JPEG/WEBP.");
+    }
+    if (message === "EMPTY_FILE" || message === "NO_READABLE_TEXT") {
+      return errorResponse(422, "Không tìm thấy nội dung đọc được. Vui lòng kiểm tra file hoặc dùng bản scan rõ hơn.");
+    }
+    if (message === "PDF_PASSWORD_REQUIRED") {
+      return errorResponse(422, "PDF được bảo vệ bằng mật khẩu. Vui lòng bỏ mật khẩu trước khi tải lên.");
     }
 
     if (message.includes("API_KEY") || message.includes("API key") || message.includes("x-goog-api-key")) {
@@ -136,7 +118,7 @@ export async function POST(request: Request) {
       return errorResponse(503, "Gemini đang tạm thời không khả dụng.", detail);
     }
 
-    if (message.includes("GEMINI_REQUEST_FAILED") || message.includes("EMPTY_GEMINI_RESPONSE") || message === "JSON") {
+    if (message.includes("GEMINI_REQUEST_FAILED") || message.includes("EMPTY_GEMINI_RESPONSE") || message === "INVALID_GEMINI_RESPONSE" || error instanceof SyntaxError) {
       return errorResponse(400, "Gemini không trả về kết quả hợp lệ.", detail);
     }
 

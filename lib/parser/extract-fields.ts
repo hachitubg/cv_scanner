@@ -31,6 +31,8 @@ const SECTION_HEADINGS = {
     "hoc van",
     "qua trinh hoc tap",
     "nen tang hoc van",
+    "trinh do hoc van",
+    "dao tao",
   ],
   skills: [
     "skills",
@@ -99,6 +101,12 @@ const ROLE_KEYWORDS = [
   "ky su",
   "thiet ke",
   "tuyen dung",
+  "ke toan",
+  "kiem toan",
+  "tai chinh",
+  "truong phong",
+  "giam doc",
+  "phu trach",
 ];
 
 const SKILL_DICTIONARY = [
@@ -192,6 +200,7 @@ function normalizeForSearch(value: string) {
   return value
     .normalize("NFD")
     .replace(/\p{M}/gu, "")
+    .replace(/[đĐ]/g, "d")
     .toLowerCase()
     .replace(/[^\p{L}\p{N}\s:/@.+#&-]/gu, " ")
     .replace(/\s+/g, " ")
@@ -200,6 +209,10 @@ function normalizeForSearch(value: string) {
 
 function cleanInlineValue(value: string) {
   return value.replace(/^[:\-–—|]\s*/, "").replace(/\s+/g, " ").trim();
+}
+
+function isBoilerplate(value: string) {
+  return /nen tang cong nghe|tuyen dung thong minh|tiep loi the|noi thanh cong|trang \d|^aid:|^topcv\b/.test(normalizeForSearch(value));
 }
 
 function toLineEntries(text: string) {
@@ -249,11 +262,11 @@ function isLikelyHeading(line: string) {
 function findValueByLabels(lines: LineEntry[], labels: string[]) {
   for (let index = 0; index < lines.length; index += 1) {
     const entry = lines[index];
-    const label = labels.find((item) => isHeadingMatch(entry.search, item));
+    const label = [...labels].sort((a, b) => b.length - a.length).find((item) => isHeadingMatch(entry.search, item));
 
     if (!label) continue;
 
-    const sameLine = cleanInlineValue(entry.raw.slice(entry.raw.toLowerCase().indexOf(":") + 1));
+    const sameLine = cleanInlineValue(entry.raw.slice(entry.raw.toLowerCase().indexOf(":") + 1).split("|")[0]);
     if (entry.raw.includes(":") && sameLine) {
       return sameLine;
     }
@@ -303,13 +316,12 @@ function extractSection(lines: LineEntry[], headings: readonly string[], maxLine
 
 function normalizePhone(phone: string) {
   return phone
-    .replace(/[^\d+]/g, " ")
-    .replace(/\s+/g, " ")
+    .replace(/[^\d+]/g, "")
     .trim();
 }
 
 function findEmails(text: string) {
-  return uniqueStrings(text.match(/[\w.+-]+@[\w-]+\.[a-z]{2,}/gi) ?? []);
+  return uniqueStrings(text.match(/[\w.+-]+@(?:[\w-]+\.)+[a-z]{2,}/gi) ?? []);
 }
 
 function findPhones(text: string) {
@@ -335,7 +347,7 @@ function toDisplayCase(value: string) {
   if (value === value.toUpperCase()) {
     return value
       .toLowerCase()
-      .replace(/\b\w/g, (char) => char.toUpperCase());
+      .replace(/(^|\s)\p{L}/gu, (char) => char.toUpperCase());
   }
 
   return value;
@@ -346,7 +358,7 @@ function looksLikeContactLine(line: string) {
 }
 
 function detectName(lines: LineEntry[]) {
-  const labeledName = findValueByLabels(lines, ["full name", "name", "ho ten"]);
+  const labeledName = findValueByLabels(lines, ["full name", "name", "ho ten", "ho va ten", "ung vien", "candidate"]);
   if (labeledName) return toDisplayCase(labeledName);
 
   const topCandidates = lines.slice(0, 10).map((line) => line.raw);
@@ -360,6 +372,8 @@ function detectName(lines: LineEntry[]) {
       line.length <= 50 &&
       !/\d/.test(line) &&
       !looksLikeContactLine(search) &&
+      !isBoilerplate(search) &&
+      !ROLE_KEYWORDS.some((keyword) => new RegExp(`(?:^|\\s)${keyword}(?:$|\\s)`).test(search)) &&
       !/resume|curriculum|vitae|cv/.test(search) &&
       !isLikelyHeading(search)
     ) {
@@ -374,7 +388,7 @@ function detectName(lines: LineEntry[]) {
   return undefined;
 }
 
-function detectPosition(lines: LineEntry[], fullName?: string) {
+function detectPosition(lines: LineEntry[], fullName?: string): { value?: string; inferred: boolean } {
   const labeledPosition = findValueByLabels(lines, [
     "position",
     "job title",
@@ -386,20 +400,31 @@ function detectPosition(lines: LineEntry[], fullName?: string) {
     "muc tieu vi tri",
   ]);
 
-  if (labeledPosition) return labeledPosition;
+  if (labeledPosition && !isBoilerplate(labeledPosition)) return { value: labeledPosition, inferred: false };
 
-  const topLines = lines.slice(0, 12);
-  for (const entry of topLines) {
+  const candidates: Array<{ value: string; score: number }> = [];
+  for (const [index, entry] of lines.entries()) {
     if (fullName && normalizeForSearch(entry.raw) === normalizeForSearch(fullName)) continue;
-    if (looksLikeContactLine(entry.search) || isLikelyHeading(entry.search)) continue;
-    if (entry.raw.length < 4 || entry.raw.length > 70 || /\d{4}/.test(entry.raw)) continue;
+    if (looksLikeContactLine(entry.search) || isLikelyHeading(entry.search) || isBoilerplate(entry.search)) continue;
+    if (entry.raw.length < 4 || entry.raw.length > 100 || /\d|@|:|[.!?;]/.test(entry.raw)) continue;
+    const value = entry.raw.replace(/^(?:[-•●▪]|s)\s+/u, "");
+    const search = normalizeForSearch(value);
+    if (/chung chi|khoa hoc|chuyen nganh|dai hoc|\bdh\b|trung tam|cong ty|university|certificate|course|bao cao|xuat sac|giai thuong|thanh tich|nhan vien cua nam|employee of the/.test(search)) continue;
+    if (search.split(" ").length > 14) continue;
+    const preceding = lines.slice(Math.max(0, index - 3), index).map((line) => line.search);
+    const followsSchool = preceding.some((line, schoolIndex) =>
+      /dai hoc|\bdh\b|university|college|chuyen nganh/.test(line) &&
+      !preceding.slice(schoolIndex + 1).some((next) => /cong ty|kinh nghiem|company|experience/.test(next)));
+    if (followsSchool) continue;
 
-    if (ROLE_KEYWORDS.some((keyword) => entry.search.includes(keyword))) {
-      return entry.raw;
+    if (ROLE_KEYWORDS.some((keyword) => new RegExp(`(?:^|\\s)${keyword}(?:$|\\s)`).test(search))) {
+      const titlePrefix = /^(?:(?:senior|junior|lead|principal|staff)\s+)?(?:truong nhom|truong phong|phu trach|ke toan|kiem toan|giam doc|nhan vien|chuyen vien|ky su|lap trinh vien|software|frontend|backend|full.?stack|data|product|project|business|accountant|designer|developer|engineer)/.test(search);
+      if (!titlePrefix && index >= 12) continue;
+      candidates.push({ value, score: (titlePrefix ? 100 : 0) + (index < 12 ? 20 : 0) - index / 1000 });
     }
   }
 
-  return undefined;
+  return { value: candidates.sort((a, b) => b.score - a.score)[0]?.value, inferred: true };
 }
 
 function pickDateCandidate(value?: string) {
@@ -463,20 +488,28 @@ function detectHometown(lines: LineEntry[]) {
 }
 
 function detectSchool(lines: LineEntry[]) {
-  const labeledSchool = findValueByLabels(lines, [
-    "school",
-    "education",
-    "truong hoc",
-    "hoc van",
-  ]);
-  if (labeledSchool) return labeledSchool;
+  const schoolPattern = /\b(?:university|college|academy|institute|school|dai hoc|hoc vien|cao dang|dh|cd)\b/;
+  for (const [index, entry] of lines.entries()) {
+    if (!schoolPattern.test(entry.search) || /chung chi|khoa hoc|tot nghiep|certificate|course|cong ty/.test(entry.search)) continue;
+    let value = entry.raw.replace(/^(?:[-•●▪]|s)\s+/u, "");
+    const next = lines[index + 1];
+    if (next && /^(?:ha noi|ho chi minh|tp\.? ho chi minh|da nang|hue|can tho)$/i.test(next.search)) {
+      value += ` ${next.raw}`;
+    }
+    return value.replace(/^(?:school|university name|trường học)\s*:\s*/iu, "").replace(/^ĐH\s+/iu, "Đại học ");
+  }
+  return undefined;
+}
 
-  const educationSection = extractSection(lines, SECTION_HEADINGS.education, 10);
-  return educationSection.find((line) =>
-    /university|college|academy|institute|school|dai hoc|hoc vien|cao dang|truong/i.test(
-      normalizeForSearch(line),
-    ),
-  );
+function detectSource(text: string) {
+  for (const line of text.split("\n")) {
+    for (const segment of line.split("|")) {
+      if (!/^(?:nguon(?: cv| ung vien| tuyen dung)?|source|candidate source)\s*:/.test(normalizeForSearch(segment))) continue;
+      const value = segment.slice(segment.indexOf(":") + 1).trim();
+      if (value && value.length <= 120) return value;
+    }
+  }
+  return undefined;
 }
 
 function detectGraduationYear(lines: LineEntry[]) {
@@ -540,7 +573,8 @@ function detectSummary(lines: LineEntry[], fullName?: string, position?: string)
     .filter((entry) => {
       if (fullName && normalizeForSearch(entry.raw) === normalizeForSearch(fullName)) return false;
       if (position && normalizeForSearch(entry.raw) === normalizeForSearch(position)) return false;
-      if (looksLikeContactLine(entry.search) || isLikelyHeading(entry.search)) return false;
+      if (looksLikeContactLine(entry.search) || isLikelyHeading(entry.search) || isBoilerplate(entry.search)) return false;
+      if (/^(?:ung vien|candidate|nguon|source|cong ty)\b/.test(entry.search)) return false;
       return entry.raw.length >= 30 && entry.raw.length <= 180;
     })
     .slice(0, 3)
@@ -712,7 +746,8 @@ export function extractFields(text: string): ParsedCVResult {
   const phones = findPhones(text);
   const links = findLinks(text);
   const fullName = detectName(lines);
-  const position = detectPosition(lines, fullName);
+  const detectedPosition = detectPosition(lines, fullName);
+  const position = detectedPosition.value;
   const languages = extractLanguages(lines);
   const certifications = extractCertifications(lines);
 
@@ -727,6 +762,10 @@ export function extractFields(text: string): ParsedCVResult {
     graduationYear: detectGraduationYear(lines),
     yearsOfExperience: detectExperience(lines, text),
     position,
+    source: detectSource(text),
+    scanWarnings: position && detectedPosition.inferred
+      ? ["Vị trí là gợi ý từ chức danh trong CV, chưa xác nhận là vị trí đang ứng tuyển."]
+      : !position ? ["CV chưa ghi rõ vị trí ứng tuyển. Vui lòng chọn vị trí trước khi lưu."] : undefined,
     summary: detectSummary(lines, fullName, position),
     skills: detectSkills(lines, text),
     notes: buildScanNotes({

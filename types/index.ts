@@ -34,6 +34,8 @@ export type SessionUser = {
 };
 
 export type ParsedCVResult = {
+  source?: string;
+  scanWarnings?: string[];
   fullName?: string;
   email?: string;
   phone?: string;

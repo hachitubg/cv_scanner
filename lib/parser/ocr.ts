@@ -1,11 +1,19 @@
-import { createCanvas } from "@napi-rs/canvas";
-import { createWorker, OEM } from "tesseract.js";
+import { PDFParse } from "pdf-parse";
+import { createWorker, OEM, PSM } from "tesseract.js";
 
 const OCR_LANGUAGES = "eng+vie";
-const OCR_PDF_SCALE = 2;
-const OCR_MAX_PDF_PAGES = 3;
+const OCR_PDF_SCALE = 3;
+const MAX_RENDER_PIXELS = 16_000_000;
 
 let workerPromise: Promise<Awaited<ReturnType<typeof createWorker>>> | null = null;
+let recognitionQueue: Promise<unknown> = Promise.resolve();
+
+export async function terminateOCRWorker() {
+  await recognitionQueue;
+  const pending = workerPromise;
+  workerPromise = null;
+  if (pending) await (await pending).terminate();
+}
 
 function normalizeOcrText(value: string) {
   return value
@@ -20,6 +28,12 @@ async function getWorker() {
   if (!workerPromise) {
     workerPromise = createWorker(OCR_LANGUAGES, OEM.LSTM_ONLY, {
       logger: () => undefined,
+    }).then(async (worker) => {
+      await worker.setParameters({ tessedit_pageseg_mode: PSM.AUTO, user_defined_dpi: "300" });
+      return worker;
+    }).catch((error) => {
+      workerPromise = null;
+      throw error;
     });
   }
 
@@ -27,52 +41,48 @@ async function getWorker() {
 }
 
 export async function extractTextFromImageWithOCR(buffer: Buffer) {
-  const worker = await getWorker();
-  const {
-    data: { text },
-  } = await worker.recognize(buffer);
-
-  return normalizeOcrText(text);
+  // A worker must finish its current image before accepting another upload.
+  const job = recognitionQueue.then(async () => {
+    const worker = await getWorker();
+    try {
+      const { data: { text } } = await worker.recognize(buffer);
+      return normalizeOcrText(text);
+    } catch (error) {
+      workerPromise = null;
+      await worker.terminate().catch(() => undefined);
+      throw error;
+    }
+  });
+  recognitionQueue = job.catch(() => undefined);
+  return job;
 }
 
-export async function extractTextFromPdfWithOCR(buffer: Buffer) {
-  const pdfjs = await import("pdfjs-dist/legacy/build/pdf.mjs");
-  const loadingTask = pdfjs.getDocument({
-    data: new Uint8Array(buffer),
-    useWorkerFetch: false,
-    isEvalSupported: false,
-    disableFontFace: true,
-  });
-
-  const pdf = await loadingTask.promise;
-  const pagesToScan = Math.min(pdf.numPages, OCR_MAX_PDF_PAGES);
+export async function extractTextFromPdfWithOCR(
+  buffer: Buffer,
+  selectedPages?: number[],
+  onPage?: (page: number, text: string) => void,
+) {
+  const parser = new PDFParse({ data: buffer });
   const pageTexts: string[] = [];
 
   try {
-    for (let pageNumber = 1; pageNumber <= pagesToScan; pageNumber += 1) {
-      const page = await pdf.getPage(pageNumber);
-      const viewport = page.getViewport({ scale: OCR_PDF_SCALE });
-      const width = Math.max(1, Math.ceil(viewport.width));
-      const height = Math.max(1, Math.ceil(viewport.height));
-      const canvas = createCanvas(width, height);
-      const context = canvas.getContext("2d");
-
-      await page.render({
-        canvas: canvas as never,
-        canvasContext: context as never,
-        viewport,
-      }).promise;
-
-      const imageBuffer = canvas.toBuffer("image/png");
-      const ocrText = await extractTextFromImageWithOCR(imageBuffer);
+    const info = await parser.getInfo({ parsePageInfo: true });
+    for (let pageNumber = 1; pageNumber <= info.total; pageNumber += 1) {
+      if (selectedPages && !selectedPages.includes(pageNumber)) continue;
+      const page = info.pages.find((item) => item.pageNumber === pageNumber);
+      const scale = page ? Math.min(OCR_PDF_SCALE, Math.sqrt(MAX_RENDER_PIXELS / (page.width * page.height))) : OCR_PDF_SCALE;
+      const screenshot = await parser.getScreenshot({ partial: [pageNumber], scale, imageDataUrl: false, imageBuffer: true });
+      const image = screenshot.pages[0];
+      if (!image) throw new Error("PDF_RENDER_FAILED");
+      const ocrText = await extractTextFromImageWithOCR(Buffer.from(image.data));
+      onPage?.(pageNumber, ocrText);
       if (ocrText) {
         pageTexts.push(ocrText);
       }
 
-      page.cleanup();
     }
   } finally {
-    await loadingTask.destroy();
+    await parser.destroy();
   }
 
   return normalizeOcrText(pageTexts.join("\n\n"));

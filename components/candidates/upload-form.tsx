@@ -95,6 +95,7 @@ export function UploadCandidateForm({
     useState(false);
   const [scanMessage, setScanMessage] = useState<string | null>(null);
   const [scanError, setScanError] = useState<string | null>(null);
+  const [scanWarnings, setScanWarnings] = useState<string[]>([]);
   const [submitError, setSubmitError] = useState<string | null>(null);
   const [isScanning, startScan] = useTransition();
   const [isSaving, startSave] = useTransition();
@@ -151,20 +152,22 @@ export function UploadCandidateForm({
   }
 
   function applyParsedResult(data: ParsedCVResult) {
+    setScanWarnings(data.scanWarnings ?? []);
     setForm((current) => ({
       ...current,
-      fullName: data.fullName ?? current.fullName,
-      email: data.email ?? current.email,
-      phone: data.phone ?? current.phone,
-      dateOfBirth: toBirthYear(data.dateOfBirth) || current.dateOfBirth,
-      school: data.school ?? current.school,
+      fullName: data.fullName ?? "",
+      email: data.email ?? "",
+      phone: data.phone ?? "",
+      dateOfBirth: toBirthYear(data.dateOfBirth) || "",
+      school: data.school ?? "",
       yearsOfExperience:
         data.yearsOfExperience !== undefined
           ? String(data.yearsOfExperience)
-          : current.yearsOfExperience,
-      position: data.position ?? current.position,
-      summary: data.summary ?? current.summary,
-      notes: data.notes ?? current.notes,
+          : "",
+      position: data.position ?? "",
+      source: data.source ?? "",
+      summary: data.summary ?? "",
+      notes: data.notes ?? "",
     }));
   }
 
@@ -232,6 +235,7 @@ export function UploadCandidateForm({
 
     setScanError(null);
     setScanMessage(null);
+    setScanWarnings([]);
 
     startScan(async () => {
       const body = new FormData();
@@ -248,11 +252,21 @@ export function UploadCandidateForm({
             ? { "x-gemini-api-key": options.apiKey }
             : undefined,
         body,
-      });
+      }).catch(() => null);
 
-      const data = (await response.json()) as ParsedCVResult & {
+      if (!response) {
+        setScanError("Kết nối bị gián đoạn. Vui lòng thử scan lại.");
+        return;
+      }
+
+      const data = (await response.json().catch(() => null)) as (ParsedCVResult & {
         error?: string;
-      };
+      }) | null;
+
+      if (!data) {
+        setScanError("Không nhận được kết quả scan hợp lệ. Vui lòng thử lại.");
+        return;
+      }
 
       if (!response.ok) {
         setScanError(data.error || "Không thể scan CV.");
@@ -399,9 +413,16 @@ export function UploadCandidateForm({
             <label className="mt-6 block cursor-pointer rounded-[2rem] border-2 border-dashed border-primary-container bg-surface-container-low px-6 py-10 text-center">
               <input
                 type="file"
+                disabled={isScanning || isSaving}
                 accept=".pdf,.docx,.txt,.png,.jpg,.jpeg,.webp"
                 className="hidden"
-                onChange={(event) => setFile(event.target.files?.[0] ?? null)}
+                onChange={(event) => {
+                  setFile(event.target.files?.[0] ?? null);
+                  setForm({ ...EMPTY_FORM, hrId: form.hrId, projectId: form.projectId });
+                  setScanWarnings([]);
+                  setScanMessage(null);
+                  setScanError(null);
+                }}
               />
               <p className="text-lg font-black text-on-surface">
                 {file?.name || "Chọn file từ máy"}
@@ -434,7 +455,7 @@ export function UploadCandidateForm({
                 variant="ghost"
                 className="w-full"
                 onClick={handleSubmit}
-                disabled={isSaving}
+                disabled={isSaving || isScanning}
               >
                 {isSaving ? "Đang lưu..." : "Lưu hồ sơ"}
               </Button>
@@ -449,6 +470,11 @@ export function UploadCandidateForm({
               <p className="mt-2 text-sm font-semibold text-rose-600">
                 {scanError}
               </p>
+            ) : null}
+            {scanWarnings.length ? (
+              <ul className="mt-3 space-y-1 text-sm font-medium text-amber-800" aria-live="polite">
+                {scanWarnings.map((warning, index) => <li key={index}>{warning}</li>)}
+              </ul>
             ) : null}
             {submitError ? (
               <p className="mt-2 text-sm font-semibold text-rose-600">
